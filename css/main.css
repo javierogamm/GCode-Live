@@ -1129,6 +1129,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  max-height: 48vh;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .columns-multi-row {
@@ -1144,6 +1147,11 @@ body {
 .columns-multi-row .columns-textarea {
   min-height: 180px;
   background: #ffffff;
+}
+
+.columns-multi-modal-card .modal-body {
+  max-height: 72vh;
+  overflow: hidden;
 }
 
 .columns-language-select {
