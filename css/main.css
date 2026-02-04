@@ -1050,6 +1050,12 @@ body {
   color: #0f172a;
 }
 
+.muted {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
 .modal-close {
   background: transparent;
   border: none;
@@ -1176,6 +1182,153 @@ body {
 .btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 22px rgba(37, 99, 235, 0.32);
+}
+
+/* =============================
+   MODAL GUARDAR PROYECTO
+   ============================= */
+
+.save-project-modal-card {
+  width: min(980px, 100%);
+}
+
+.save-project-body {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.save-project-sidebar {
+  border-right: 1px solid #e5e7eb;
+  padding-right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.save-project-sidebar h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.save-project-add-btn {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.save-project-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.save-project-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.save-project-folder-item.active {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #7f1d1d;
+}
+
+.save-project-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.save-project-input-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.save-project-input-row input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 14px;
+}
+
+.save-project-list {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px;
+  background: #ffffff;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.save-project-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.save-project-item span {
+  font-size: 13px;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.save-project-use-btn {
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.save-project-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.save-project-save-btn {
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save-project-status {
+  font-size: 12px;
+  color: #b91c1c;
 }
 
 .btn-secondary {
