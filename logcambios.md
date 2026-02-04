@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.30 - 2026-02-27
+- Se añadió scroll vertical al modal de doble columna multipárrafo para manejar listas largas de párrafos sin perder la barra de acciones.
+
+## v1.3.29 - 2026-02-27
+- Se añadió el botón "Doble columna multipárrafo" para gestionar bloques de doble columna en múltiples párrafos desde un solo modal.
+- El nuevo modal multipárrafo detecta varios bloques/paragraphs de doble columna, los separa por fila y permite aplicar idioma por columna en lote.
+
 ## v1.3.28 - 2026-02-26
 - Se incorporó un login basado en la tabla `users` para bloquear el editor hasta autenticar al usuario.
 - Se añadió un acordeón de usuario en el panel izquierdo con estado visual y edición de nombre/contraseña.

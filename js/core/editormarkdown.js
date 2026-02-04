@@ -598,6 +598,9 @@ function applyMarkdownFormat(type) {
         case "columns":
             openColumnsModal();
             return;
+        case "columnsMulti":
+            openMultiColumnsModal();
+            return;
     }
 
     ta.setRangeText(formatted, start, end, "end");
@@ -909,6 +912,307 @@ function insertColumnsFromModal(modal) {
     updateHighlight();
 
     modal.style.display = "none";
+}
+
+/* =======================================
+   MODAL DOBLE COLUMNA MULTIPÁRRAFO
+======================================= */
+const columnsMultiModalState = {
+    modal: null,
+    selectionStart: 0,
+    selectionEnd: 0,
+    languageLeft: "es_ES",
+    languageRight: "es_ES",
+    rows: []
+};
+
+function ensureMultiColumnsModal() {
+    if (columnsMultiModalState.modal) return columnsMultiModalState.modal;
+
+    const modal = document.createElement("div");
+    modal.id = "columnsMultiModal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-card columns-modal-card columns-multi-modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3>Insertar bloque de doble columna multipárrafo</h3>
+                    <p class="muted">Cada párrafo se gestiona en filas separadas manteniendo la distribución izquierda/derecha.</p>
+                </div>
+                <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="columns-language-bar">
+                    <label class="form-row">
+                        <span>Idioma columna izquierda</span>
+                        <select id="columnsMultiLeftLanguage" class="columns-language-select">
+                            ${buildLanguageOptions(columnsMultiModalState.languageLeft)}
+                        </select>
+                    </label>
+                    <label class="form-row">
+                        <span>Idioma columna derecha</span>
+                        <select id="columnsMultiRightLanguage" class="columns-language-select">
+                            ${buildLanguageOptions(columnsMultiModalState.languageRight)}
+                        </select>
+                    </label>
+                </div>
+                <div id="columnsMultiRows" class="columns-multi-rows"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" data-action="cancelar">Cancelar</button>
+                    <button type="button" class="btn-secondary" data-action="add-row">Añadir párrafo</button>
+                    <button type="button" class="btn-primary" data-action="insertar">Insertar columnas</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeModal = () => {
+        modal.style.display = "none";
+    };
+
+    const closeBtn = modal.querySelector(".modal-close");
+    const cancelBtn = modal.querySelector("[data-action='cancelar']");
+    const addRowBtn = modal.querySelector("[data-action='add-row']");
+    const insertBtn = modal.querySelector("[data-action='insertar']");
+    const leftLanguage = modal.querySelector("#columnsMultiLeftLanguage");
+    const rightLanguage = modal.querySelector("#columnsMultiRightLanguage");
+
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+    if (addRowBtn) addRowBtn.addEventListener("click", () => addMultiColumnsRow(modal));
+    if (insertBtn) insertBtn.addEventListener("click", () => insertMultiColumnsFromModal(modal));
+    if (leftLanguage) {
+        leftLanguage.addEventListener("change", () => {
+            columnsMultiModalState.languageLeft = leftLanguage.value;
+            applyLanguageToMultiColumns(modal, "left", leftLanguage.value);
+        });
+    }
+    if (rightLanguage) {
+        rightLanguage.addEventListener("change", () => {
+            columnsMultiModalState.languageRight = rightLanguage.value;
+            applyLanguageToMultiColumns(modal, "right", rightLanguage.value);
+        });
+    }
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && modal.style.display === "flex") {
+            closeModal();
+        }
+    });
+
+    columnsMultiModalState.modal = modal;
+    return modal;
+}
+
+function openMultiColumnsModal() {
+    const modal = ensureMultiColumnsModal();
+    const ta = markdownText;
+
+    columnsMultiModalState.selectionStart = ta.selectionStart || 0;
+    columnsMultiModalState.selectionEnd = ta.selectionEnd || 0;
+    const selection = ta.value.slice(
+        columnsMultiModalState.selectionStart,
+        columnsMultiModalState.selectionEnd
+    );
+
+    const defaultLeft = "**COLUMNA 1**\nEste es el contenido de la columna 1";
+    const defaultRight = "**COLUMNA 2**\nEste es el contenido de la columna 2";
+
+    const matchedBlocks = findColumnsBlocksInRange(
+        ta.value,
+        columnsMultiModalState.selectionStart,
+        columnsMultiModalState.selectionEnd
+    );
+
+    if (matchedBlocks.length > 0) {
+        columnsMultiModalState.selectionStart = matchedBlocks[0].blockStart;
+        columnsMultiModalState.selectionEnd = matchedBlocks[matchedBlocks.length - 1].blockEnd;
+    }
+
+    let rows = [];
+
+    if (matchedBlocks.length > 0) {
+        matchedBlocks.forEach((block) => {
+            const leftParagraphs = splitColumnsParagraphs(block.left);
+            const rightParagraphs = splitColumnsParagraphs(block.right);
+            const maxLength = Math.max(leftParagraphs.length, rightParagraphs.length, 1);
+
+            for (let i = 0; i < maxLength; i += 1) {
+                rows.push({
+                    left: leftParagraphs[i] || "",
+                    right: rightParagraphs[i] || ""
+                });
+            }
+        });
+    } else if (selection.trim()) {
+        const selectionParagraphs = splitColumnsParagraphs(selection);
+        rows = selectionParagraphs.map((paragraph) => ({
+            left: paragraph,
+            right: ""
+        }));
+    } else {
+        rows = [{ left: defaultLeft, right: defaultRight }];
+    }
+
+    if (rows.length === 0) {
+        rows = [{ left: defaultLeft, right: defaultRight }];
+    }
+
+    columnsMultiModalState.rows = rows;
+
+    renderMultiColumnsRows(modal, rows);
+
+    const leftLanguage = modal.querySelector("#columnsMultiLeftLanguage");
+    const rightLanguage = modal.querySelector("#columnsMultiRightLanguage");
+    if (leftLanguage) {
+        leftLanguage.value = columnsMultiModalState.languageLeft || "es_ES";
+    }
+    if (rightLanguage) {
+        rightLanguage.value = columnsMultiModalState.languageRight || "es_ES";
+    }
+
+    modal.style.display = "flex";
+    const firstTextarea = modal.querySelector(".columns-multi-textarea");
+    if (firstTextarea) firstTextarea.focus();
+}
+
+function renderMultiColumnsRows(modal, rows) {
+    const container = modal.querySelector("#columnsMultiRows");
+    if (!container) return;
+
+    container.innerHTML = rows
+        .map((row, index) => {
+            const rowNumber = index + 1;
+            return `
+                <div class="columns-multi-row" data-index="${index}">
+                    <label class="form-row">
+                        <span>Columna izquierda · Párrafo ${rowNumber}</span>
+                        <textarea class="columns-textarea columns-multi-textarea" data-column="left" placeholder="Contenido párrafo izquierda">${row.left || ""}</textarea>
+                    </label>
+                    <label class="form-row">
+                        <span>Columna derecha · Párrafo ${rowNumber}</span>
+                        <textarea class="columns-textarea columns-multi-textarea" data-column="right" placeholder="Contenido párrafo derecha">${row.right || ""}</textarea>
+                    </label>
+                </div>
+            `;
+        })
+        .join("");
+
+    attachMultiColumnsTextareaHandlers(modal);
+}
+
+function addMultiColumnsRow(modal) {
+    const existingRows = collectMultiColumnsRows(modal, true);
+    const newRow = { left: "", right: "" };
+    columnsMultiModalState.rows = [...existingRows, newRow];
+    renderMultiColumnsRows(modal, columnsMultiModalState.rows);
+}
+
+function attachMultiColumnsTextareaHandlers(modal) {
+    const leftLanguage = modal.querySelector("#columnsMultiLeftLanguage");
+    const rightLanguage = modal.querySelector("#columnsMultiRightLanguage");
+
+    modal.querySelectorAll(".columns-multi-textarea").forEach((textarea) => {
+        const column = textarea.dataset.column;
+        const languageSelect = column === "left" ? leftLanguage : rightLanguage;
+        textarea.addEventListener("paste", (event) => {
+            handleColumnsPaste(event, textarea, languageSelect);
+        });
+    });
+}
+
+function applyLanguageToMultiColumns(modal, column, languageCode) {
+    if (!modal || !languageCode) return;
+    const selector = `.columns-multi-textarea[data-column='${column}']`;
+    modal.querySelectorAll(selector).forEach((textarea) => {
+        const updated = updateLanguageForThesaurusText(textarea.value, languageCode, false);
+        if (updated !== textarea.value) {
+            textarea.value = updated;
+        }
+    });
+}
+
+function collectMultiColumnsRows(modal, keepEmpty = false) {
+    const rows = [];
+    modal.querySelectorAll(".columns-multi-row").forEach((row) => {
+        const leftInput = row.querySelector(".columns-multi-textarea[data-column='left']");
+        const rightInput = row.querySelector(".columns-multi-textarea[data-column='right']");
+        const leftValue = leftInput ? leftInput.value.trim() : "";
+        const rightValue = rightInput ? rightInput.value.trim() : "";
+        if (!keepEmpty && !leftValue && !rightValue) return;
+        rows.push({ left: leftValue, right: rightValue });
+    });
+    return rows;
+}
+
+function insertMultiColumnsFromModal(modal) {
+    const ta = markdownText;
+    const rows = collectMultiColumnsRows(modal);
+    const defaultLeft = "**COLUMNA 1**\nEste es el contenido de la columna 1";
+    const defaultRight = "**COLUMNA 2**\nEste es el contenido de la columna 2";
+    const safeRows = rows.length ? rows : [{ left: defaultLeft, right: defaultRight }];
+
+    const blocks = safeRows.map((row) => {
+        const leftValue = row.left || "";
+        const rightValue = row.right || "";
+        return `[columns:block]\n${leftValue}\n[columns:split]\n${rightValue}\n[columns]`;
+    });
+
+    const blockText = blocks.join("\n\n");
+
+    const start = columnsMultiModalState.selectionStart || 0;
+    const end = columnsMultiModalState.selectionEnd || start;
+    const before = ta.value.slice(0, start);
+    const after = ta.value.slice(end);
+
+    ta.value = before + blockText + after;
+    const cursorPos = before.length + blockText.length;
+    ta.selectionStart = cursorPos;
+    ta.selectionEnd = cursorPos;
+    ta.focus();
+
+    recordUndoAfterChange(ta);
+    updateHighlight();
+
+    modal.style.display = "none";
+}
+
+function splitColumnsParagraphs(text) {
+    if (!text) return [];
+    return text
+        .replace(/\r\n/g, "\n")
+        .split(/\n\s*\n/)
+        .map((paragraph) => paragraph.trim())
+        .filter(Boolean);
+}
+
+function findColumnsBlocksInRange(content, selectionStart, selectionEnd) {
+    if (!content) return [];
+    const start = Math.min(selectionStart, selectionEnd);
+    const end = Math.max(selectionStart, selectionEnd);
+    const matcher = /\[columns:block\]([\s\S]*?)\[columns:split\]([\s\S]*?)\[columns\]/g;
+    const matches = [];
+    let match;
+
+    while ((match = matcher.exec(content)) !== null) {
+        const blockStart = match.index;
+        const blockEnd = blockStart + match[0].length;
+        const isCursorInside = start === end && start >= blockStart && start <= blockEnd;
+        const isSelectionOverlapping = start !== end && start <= blockEnd && end >= blockStart;
+
+        if (isCursorInside || isSelectionOverlapping) {
+            matches.push({
+                left: normalizeColumnsCapturedValue(match[1]),
+                right: normalizeColumnsCapturedValue(match[2]),
+                blockStart,
+                blockEnd
+            });
+        }
+    }
+
+    return matches;
 }
 
 /* =======================================
