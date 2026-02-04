@@ -1119,6 +1119,33 @@ body {
   gap: 16px;
 }
 
+.columns-language-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.columns-multi-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.columns-multi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.columns-multi-row .columns-textarea {
+  min-height: 180px;
+  background: #ffffff;
+}
+
 .columns-language-select {
   padding: 10px 12px;
   border-radius: 10px;
