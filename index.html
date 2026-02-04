@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <title>Editor Markdown Básico</title>
+    <link rel="stylesheet" href="css/main.css" />
+</head>
+
+<body>
+
+    <!-- PANEL IZQUIERDO -->
+    <div id="leftPanel">
+        <h2>Editor Markdown</h2>
+        <div class="app-version">v1.3.26</div>
+
+        <button class="btn" id="btnNuevo">📝 Nuevo</button>
+        <button class="btn" id="btnPegarAuto">📥 Pegar</button>
+        <button class="btn" id="btnCopiar">📋 Copiar Markdown</button>
+        <button class="btn" id="btnDescargar">⬇️ Descargar .md</button>
+        <button class="btn" id="btnExportProyecto">🧾 Exportar proyecto (JSON)</button>
+        <button class="btn" id="btnImportProyecto">📂 Importar proyecto (JSON)</button>
+        <button class="btn" id="btnExportCsv">🗂️ Exportar CSV</button>
+        <hr>
+    </div>
+
+    <!-- ZONA CENTRAL -->
+    <div id="mainArea">
+
+        <h1 class="main-title">Área principal: Editor Markdown</h1>
+
+        <!-- TOOLBAR SUPERIOR -->
+        <div id="toolbar" class="toolbar">
+            <button data-md="bold"><b>B</b></button>
+            <button data-md="italic"><i>I</i></button>
+            <button data-md="underline"><u>U</u></button>
+
+            <span class="separator"></span>
+
+            <button data-md="h1">H1</button>
+            <button data-md="h2">H2</button>
+
+            <span class="separator"></span>
+
+            <button data-md="ul">• Lista</button>
+            <button data-md="ol">1. Lista</button>
+
+            <span class="separator"></span>
+
+            <button data-md="quote">❝</button>
+            <button data-md="code">{ }</button>
+
+            <span class="separator"></span>
+            <button data-md="table">📊 Tabla</button>
+            <button data-md="columns">🧱 Doble columna</button>
+        </div>
+
+        <!-- SOLO EDITOR MARKDOWN -->
+        <div id="workContainer">
+            <div id="lineNumbers" aria-hidden="true"></div>
+            <textarea id="markdownText" spellcheck="false"></textarea>
+        </div>
+
+    </div>
+
+    <script src="js/core/editormarkdown.js"></script>
+    <script src="js/features/sections.js"></script>
+    <script src="js/features/let.js"></script>
+    <script src="js/features/definition.js"></script>
+    <script src="js/features/tables.js"></script>
+    <!-- === TESAURO: integración panel y gestor completo === -->
+    <script src="js/tesauro/datatesauro_md.js"></script>
+    <script src="js/tesauro/tesauromanager_md.js"></script>
+    <!-- === FIN TESAURO === -->
+
+    <button id="guideTrigger" class="guide-trigger" type="button">GUÍA</button>
+    <script src="js/core/guide.js"></script>
+
+</body>
+</html>

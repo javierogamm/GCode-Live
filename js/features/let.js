@@ -1,0 +1,1301 @@
+/* ============================================================
+   LET.JS
+   Inserta bloques:
+
+   {{let | reference: personalized.REF_DESTINO | result: FORMULA}}
+
+   - Botón "LET" en la toolbar
+   - No hace falta tener texto seleccionado
+   - Inserta el LET donde está el cursor
+   - Opera sobre tesauros:
+       · numero
+       · moneda
+       · si_no (true / false)
+   - Y sobre variables creadas con:
+       {{definition | reference: REF | type: numeric | value: 10}}
+
+   - En la fórmula:
+       · Tesauros se escriben con ALIAS amigable (no se ve personalized.REF)
+       · Variables se escriben como la REFERENCIA (REF)
+   - Al generar el código:
+       · ALIAS de tesauro → personalized.REF
+       · REFERENCIA de variable → variable.REF
+
+   - Si el cursor/selección está dentro de un {{let ...}},
+     el botón LET abre el modal en modo EDICIÓN de ese bloque.
+============================================================ */
+
+const LetManager = {
+
+    textarea: null,
+    btn: null,
+
+    modal: null,
+    refSelect: null,
+    refTargetSelect: null,
+    refInput: null,
+    formulaInput: null,
+    refHint: null,
+    tesauroList: null,
+    defList: null,
+
+    tesauroFields: [],
+    definitionVars: [],
+    caretPos: null,
+
+    // contexto extra
+    currentDestField: null,   // tesauro destino (para saber si es si_no / numero / moneda)
+    opBar: null,              // barra de operadores rápidos
+    // *** CAMBIO: eliminada gestión de constante numérica (constRow/constInput/constBtn)
+    boolBar: null,            // barra de atajos SI/NO
+
+    // alias → { kind: "tesauro" | "variable", ref: "REF" }
+    tokenMap: {},
+
+    // rango de LET en modo edición (start, end) o null si es nuevo
+    editingLetRange: null,
+
+    // tipo de referencia destino: personalized (tesauro) | variable
+    destRefKind: "personalized",
+
+    /* =======================================
+       INIT
+    ======================================= */
+    init() {
+        const ta = document.getElementById("markdownText");
+        const toolbar =
+            document.getElementById("toolbar") ||
+            document.querySelector(".toolbar");
+        const floatingRow = (window.ensureFloatingActionRow && ensureFloatingActionRow()) || null;
+
+        if (!ta || !toolbar) return;
+
+        this.textarea = ta;
+
+        // --- Botón LET en la toolbar ---
+        let btn = document.getElementById("btnLet");
+        if (!btn) {
+            btn = document.createElement("button");
+            btn.id = "btnLet";
+            btn.type = "button";
+            btn.textContent = "LET";
+            btn.className = "floating-action-btn";
+
+            if (floatingRow) {
+                floatingRow.appendChild(btn);
+            } else {
+                toolbar.appendChild(btn);
+            }
+        }
+        this.btn = btn;
+
+        btn.addEventListener("mousedown", (e) => e.preventDefault());
+        btn.addEventListener("click", () => this.openModal());
+
+        this.createModal();
+    },
+
+    /* =======================================
+       MODAL
+    ======================================= */
+    createModal() {
+        if (this.modal) return;
+
+        const div = document.createElement("div");
+        div.id = "letModal";
+        div.style.position = "fixed";
+        div.style.inset = "0";
+        div.style.background = "rgba(0,0,0,0.45)";
+        div.style.display = "none";
+        div.style.alignItems = "center";
+        div.style.justifyContent = "center";
+        div.style.zIndex = "99999";
+
+        div.innerHTML = `
+            <div style="
+                background:white;
+                padding:22px 24px;
+                border-radius:12px;
+                box-shadow:0 8px 28px rgba(0,0,0,0.28);
+                width:1140px;
+                max-width:98%;
+                font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                font-size:14px;
+            ">
+                <h2 style="margin:0 0 10px 0; font-size:18px; color:#111827;">
+                    Crear LET (cálculo)
+                </h2>
+
+                <p style="margin:0 0 12px 0; font-size:12px; color:#6b7280;">
+                    Genera una instrucción
+                    <code>{{let | reference: personalized.MiCampo | result: ...}}</code>
+                    o <code>{{let | reference: variable.MiVariable | result: ...}}</code>
+                    para cálculos con tesauros <strong>número / moneda / sí_no</strong>
+                    y variables <code>{{definition}}</code> de tipo <strong>numeric</strong>.
+                </p>
+
+                <div style="display:flex; gap:18px; align-items:flex-start;">
+                    <!-- Columna izquierda: referencia + fórmula -->
+                    <div style="flex:1; display:flex; flex-direction:column; gap:10px; min-width:0;">
+                        <div>
+                            <span style="display:block; font-size:12px; color:#6b7280; margin-bottom:3px;">
+                                Referencia destino (personalized.REF / variable.REF)
+                            </span>
+                            <div style="display:flex; gap:10px; width:100%;">
+                                <select id="letRefSelect" style="
+                                    flex:1;
+                                    padding:7px 8px;
+                                    border-radius:8px;
+                                    border:1px solid #cbd5e1;
+                                    font-size:13px;
+                                    min-width:0;
+                                "></select>
+                                <select id="letRefTarget" style="
+                                    min-width:240px;
+                                    max-width:320px;
+                                    padding:7px 8px;
+                                    border-radius:8px;
+                                    border:1px solid #cbd5e1;
+                                    font-size:13px;
+                                ">
+                                    <option value="personalized">Tesauro (personalized.)</option>
+                                    <option value="variable">Variable (variable.)</option>
+                                </select>
+                            </div>
+                            <input id="letRefInput" type="text" placeholder="MiCampoResultado" style="
+                                margin-top:6px;
+                                width:100%;
+                                padding:8px 10px;
+                                border-radius:8px;
+                                border:1px solid #cbd5e1;
+                                font-size:14px;
+                            ">
+                            <p id="letRefHint" style="font-size:11px; color:#9ca3af; margin:4px 0 0 0;">
+                                Se insertará como <code>personalized.&lt;referencia&gt;</code>.
+                            </p>
+                        </div>
+
+                        <div>
+                            <span style="display:block; font-size:12px; color:#6b7280; margin-bottom:3px;">
+                                Fórmula (result)
+                            </span>
+                            <textarea id="letFormulaInput" rows="6" style="
+                                width:100%;
+                                padding:10px 12px;
+                                border-radius:8px;
+                                border:1px solid #cbd5e1;
+                                font-size:14px;
+                                font-family:Consolas,monospace;
+                                resize:vertical;
+                            "></textarea>
+
+                            <!-- Barra de operadores rápidos -->
+                            <div id="letOpBar" style="
+                                margin-top:8px;
+                                display:flex;
+                                flex-wrap:wrap;
+                                gap:6px;
+                                align-items:center;
+                                font-size:12px;
+                                color:#6b7280;
+                            ">
+                                <span>Operadores rápidos:</span>
+                                <button type="button" data-op="+" style="
+                                    padding:4px 8px;
+                                    border-radius:999px;
+                                    border:1px solid #cbd5e1;
+                                    background:#f9fafb;
+                                    cursor:pointer;
+                                ">+</button>
+                                <button type="button" data-op="-" style="
+                                    padding:4px 8px;
+                                    border-radius:999px;
+                                    border:1px solid #cbd5e1;
+                                    background:#f9fafb;
+                                    cursor:pointer;
+                                ">-</button>
+                                <button type="button" data-op="*" style="
+                                    padding:4px 8px;
+                                    border-radius:999px;
+                                    border:1px solid #cbd5e1;
+                                    background:#f9fafb;
+                                    cursor:pointer;
+                                ">*</button>
+                                <button type="button" data-op="/" style="
+                                    padding:4px 8px;
+                                    border-radius:999px;
+                                    border:1px solid #cbd5e1;
+                                    background:#f9fafb;
+                                    cursor:pointer;
+                                ">/</button>
+                                <!-- *** CAMBIO: botón de paréntesis ahora es "()" y se ha eliminado el botón separado de ")" -->
+                                <button type="button" data-op="()" style="
+                                    padding:4px 8px;
+                                    border-radius:999px;
+                                    border:1px solid #cbd5e1;
+                                    background:#f9fafb;
+                                    cursor:pointer;
+                                ">()</button>
+                            </div>
+
+                            <!-- *** CAMBIO: eliminada la fila de "Constante numérica" -->
+
+                            <!-- Atajos SI / NO -->
+                            <div id="letBoolBar" style="
+                                margin-top:8px;
+                                display:flex;
+                                align-items:center;
+                                gap:8px;
+                                font-size:12px;
+                                color:#6b7280;
+                            ">
+                                <span>Atajos sí/no:</span>
+                                <button type="button" data-bool="si" style="
+                                    padding:4px 10px;
+                                    border-radius:999px;
+                                    border:1px solid #cbd5e1;
+                                    background:#f9fafb;
+                                    cursor:pointer;
+                                ">SI</button>
+                                <button type="button" data-bool="no" style="
+                                    padding:4px 10px;
+                                    border-radius:999px;
+                                    border:1px solid #cbd5e1;
+                                    background:#f9fafb;
+                                    cursor:pointer;
+                                ">NO</button>
+                            </div>
+
+                            <p style="font-size:11px; color:#9ca3af; margin:4px 0 0 0;">
+                                Ejemplos:
+                                <code>ImporteTotal + 10</code>,
+                                <code>Base - Descuento</code>,
+                                <code>FlagAutorizacion == true</code>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Columna derecha: tesauros + variables -->
+                    <div style="width:320px; border-left:1px solid #e5e7eb; padding-left:14px; flex-shrink:0;">
+                        <h3 style="margin:0 0 6px 0; font-size:13px; color:#111827;">
+                            Tesauros para usar en la fórmula
+                        </h3>
+                        <p style="margin:0 0 6px 0; font-size:11px; color:#6b7280;">
+                            Clic para insertar un <strong>alias</strong> en la fórmula
+                            (luego se convertirá a <code>personalized.REF</code>).
+                        </p>
+                        <input id="letTesauroSearch" type="text" placeholder="Buscar por nombre o referencia..." style="
+                                width:100%;
+                                margin:0 0 8px 0;
+                                padding:7px 8px;
+                                border-radius:8px;
+                                border:1px solid #cbd5e1;
+                                font-size:13px;
+                            ">
+                            <div id="letTesauroList" style="
+                            max-height:220px;
+                            min-height:220px;
+                            overflow:auto;
+                            border-radius:8px;
+                            border:1px solid #e5e7eb;
+                            background:#f9fafb;
+                            padding:6px;
+                            font-size:12px;
+                        "></div>
+
+                        <div style="margin-top:12px; padding-top:10px; border-top:1px dashed #e5e7eb;"></div>
+
+                        <h3 style="margin:8px 0 4px 0; font-size:13px; color:#111827;">
+                            Variables (definition, numeric)
+                        </h3>
+                        <p style="margin:0 0 8px 0; font-size:11px; color:#6b7280;">
+                            Clic para insertar la <strong>referencia</strong> de la variable
+                            (en el código será <code>variable.REF</code>).
+                        </p>
+                        <div id="letDefinitionList" style="
+                            max-height:180px;
+                            overflow:auto;
+                            border-radius:6px;
+                            border:1px solid #dbeafe;
+                            background:#eff6ff;
+                            padding:6px;
+                            font-size:12px;
+                        "></div>
+                    </div>
+                </div>
+                <!-- === NUEVOS CONTROLES === -->
+                <div style="margin-top:10px; display:flex; gap:14px; align-items:center;">
+
+                    <!-- zeroIfNull -->
+                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:#374151;">
+                        <input id="letZeroIfNull" type="checkbox">
+                        Zero if null
+                    </label>
+
+                    <!-- decimals -->
+                    <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:#374151;">
+                        Decimales:
+                        <input id="letDecimals" type="number" min="0" step="1"
+                            style="width:60px; padding:4px 6px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+                    </label>
+                </div>
+                <div style="margin-top:18px; display:flex; justify-content:flex-end; gap:10px;">
+                    <button id="letCancelBtn" type="button" style="
+                        padding:9px 14px;
+                        border-radius:8px;
+                        border:1px solid #e5e7eb;
+                        background:#f3f4f6;
+                        font-size:14px;
+                        cursor:pointer;
+                    ">Cancelar</button>
+
+                    <button id="letOkBtn" type="button" style="
+                        padding:9px 16px;
+                        border-radius:8px;
+                        border:none;
+                        background:#1d4ed8;
+                        color:white;
+                        font-size:14px;
+                        cursor:pointer;
+                        font-weight:500;
+                    ">Insertar LET</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(div);
+
+        this.modal        = div;
+        this.refSelect    = div.querySelector("#letRefSelect");
+        this.refTargetSelect = div.querySelector("#letRefTarget");
+        this.refInput     = div.querySelector("#letRefInput");
+        this.formulaInput = div.querySelector("#letFormulaInput");
+        this.zeroIfNullInput = div.querySelector("#letZeroIfNull");
+        this.decimalsInput   = div.querySelector("#letDecimals");
+        this.tesauroList  = div.querySelector("#letTesauroList");
+        this.defList      = div.querySelector("#letDefinitionList");
+        this.tesauroSearch = div.querySelector("#letTesauroSearch");  // *** NUEVO ***
+        this.refHint      = div.querySelector("#letRefHint");
+
+        if (this.tesauroSearch) {
+            const onSearchChange = () => this.renderTesauroList();
+            this.tesauroSearch.addEventListener("input", onSearchChange);
+            this.tesauroSearch.addEventListener("keyup", onSearchChange); // por si acaso
+        }
+        // referencias al builder
+        this.opBar      = div.querySelector("#letOpBar");
+        this.boolBar    = div.querySelector("#letBoolBar");
+
+            // *** NUEVO: filtrar lista de tesauros al escribir ***
+            if (this.tesauroSearch) {
+                this.tesauroSearch.addEventListener("input", () => {
+                    this.renderTesauroList();
+                });
+            }
+        const btnOk     = div.querySelector("#letOkBtn");
+        const btnCancel = div.querySelector("#letCancelBtn");
+
+        btnCancel.addEventListener("click", () => this.closeModal());
+        btnOk.addEventListener("click", () => this.apply());
+
+        // Cerrar con ESC
+        document.addEventListener("keydown", (e) => {
+            if (!this.modal || this.modal.style.display !== "flex") return;
+            if (e.key === "Escape") this.closeModal();
+        });
+
+        // Cambiar referencia al seleccionar tesauro destino
+        if (this.refSelect) {
+            this.refSelect.addEventListener("change", () => this.onChangeRefSelect());
+        }
+
+        if (this.refTargetSelect) {
+            this.refTargetSelect.addEventListener("change", () => this.onChangeRefTarget());
+        }
+
+        // *** CAMBIO: lógica de operadores rápidos, incluyendo "()" que envuelve selección
+        if (this.opBar) {
+            this.opBar.querySelectorAll("button[data-op]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    const op = btn.getAttribute("data-op") || "";
+                    if (!op) return;
+
+                    // Solo si destino numérico
+                    if (!this.isNumericDest()) return;
+
+                    const ta = this.formulaInput;
+                    if (!ta) return;
+
+                    // Botón de paréntesis "()" → si hay selección, envolverla;
+                    // si no hay selección, insertar "()" y colocar el cursor dentro.
+                    if (op === "()") {
+                        const start = ta.selectionStart || 0;
+                        const end   = ta.selectionEnd || start;
+                        const value = ta.value || "";
+
+                        if (end > start) {
+                            const before   = value.slice(0, start);
+                            const selected = value.slice(start, end);
+                            const after    = value.slice(end);
+                            ta.value = before + "(" + selected + ")" + after;
+                            ta.selectionStart = start + 1;
+                            ta.selectionEnd   = end + 1;
+                        } else {
+                            const before = value.slice(0, start);
+                            const after  = value.slice(start);
+                            ta.value = before + "()" + after;
+                            ta.selectionStart = ta.selectionEnd = start + 1;
+                        }
+                        return;
+                    }
+
+                    // Resto de operadores → insertar con espacios
+                    this.insertTokenInFormula(" " + op + " ");
+                });
+            });
+        }
+
+        // *** CAMBIO: eliminada la lógica de "Constante numérica"
+
+        // Atajos SI / NO
+        if (this.boolBar) {
+            this.boolBar.querySelectorAll("button[data-bool]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    const token = btn.getAttribute("data-bool") || "";
+                    if (!token || !this.formulaInput) return;
+
+                    if (this.getDestType() === "si_no") {
+                        // Para si_no, la fórmula es solo si/no
+                        this.formulaInput.value = token;
+                    } else {
+                        this.insertTokenInFormula(token);
+                    }
+                });
+            });
+        }
+    },
+
+    /* =======================================
+       Utilidades tipo destino
+    ======================================= */
+    getDestType() {
+        if (this.destRefKind === "variable") return "variable";
+        const f = this.currentDestField;
+        if (!f || !f.tipo) return null;
+        return String(f.tipo);
+    },
+
+    isNumericDest() {
+        const t = this.getDestType();
+        return t === "numero" || t === "moneda" || t === "variable";
+    },
+
+    updateFormulaUIForDestType() {
+        const destType = this.getDestType();
+        const isBool   = destType === "si_no";
+        const isNum    = destType === "numero" || destType === "moneda" || destType === "variable";
+
+        if (this.formulaInput) {
+            this.formulaInput.disabled = isBool;
+        }
+
+        const lockNumTools = !isNum;
+
+        if (this.opBar) {
+            this.opBar.style.opacity       = lockNumTools ? "0.4" : "1";
+            this.opBar.style.pointerEvents = lockNumTools ? "none" : "auto";
+        }
+        // *** CAMBIO: ya no hay constRow; se mantiene control sobre tesauroList/defList
+        if (this.tesauroList) {
+            this.tesauroList.style.opacity       = lockNumTools ? "0.4" : "1";
+            this.tesauroList.style.pointerEvents = lockNumTools ? "none" : "auto";
+        }
+        if (this.defList) {
+            this.defList.style.opacity       = lockNumTools ? "0.4" : "1";
+            this.defList.style.pointerEvents = lockNumTools ? "none" : "auto";
+        }
+
+        if (this.boolBar) {
+            this.boolBar.style.display = isBool ? "flex" : "none";
+        }
+    },
+
+    /* =======================================
+       Tesauros
+    ======================================= */
+    buildTesauroFields() {
+        this.tesauroFields = [];
+
+        if (!window.DataTesauro || !Array.isArray(DataTesauro.campos)) return;
+
+        const campos = DataTesauro.campos || [];
+
+        const usedTokens = new Set();
+
+        this.tesauroFields = campos
+            .filter(function (c) {
+                return (
+                    c &&
+                    (c.tipo === "numero" ||
+                     c.tipo === "moneda" ||
+                     c.tipo === "si_no")
+                );
+            })
+            .map((c) => {
+                let base = c.nombre || c.ref || "Campo";
+                base = String(base).trim();
+                if (!base) base = c.ref || "Campo";
+
+                let token = base.replace(/\s+/g, "_").replace(/[^\w]/g, "_");
+                if (!token) token = c.ref || "Campo";
+
+                let originalToken = token;
+                let i = 2;
+                while (usedTokens.has(token)) {
+                    token = originalToken + "_" + i++;
+                }
+                usedTokens.add(token);
+
+                const ref = c.ref || "";
+                if (ref) {
+                    this.tokenMap[token] = { kind: "tesauro", ref: ref };
+                }
+
+                return {
+                    ...c,
+                    token: token
+                };
+            });
+    },
+
+    populateRefSelect() {
+        if (!this.refSelect) return;
+
+        this.refSelect.innerHTML = "";
+
+        const optNone = document.createElement("option");
+        optNone.value = "";
+        optNone.dataset.kind = "manual";
+        optNone.textContent = "— Referencia manual —";
+        this.refSelect.appendChild(optNone);
+
+        const isVariableTarget = this.destRefKind === "variable";
+        const sourceList = isVariableTarget ? this.definitionVars : this.tesauroFields;
+
+        if (!sourceList.length) {
+            const empty = document.createElement("option");
+            empty.value = "";
+            empty.dataset.kind = isVariableTarget ? "variable" : "tesauro";
+            empty.textContent = isVariableTarget
+                ? "(sin variables numeric definidas)"
+                : "(sin tesauros numéricos disponibles)";
+            empty.disabled = true;
+            this.refSelect.appendChild(empty);
+            return;
+        }
+
+        sourceList.forEach(function (item, idx) {
+            const o = document.createElement("option");
+            o.value = String(idx);
+            o.dataset.kind = isVariableTarget ? "variable" : "tesauro";
+
+            if (isVariableTarget) {
+                o.textContent = `${item.ref} [variable]`;
+            } else {
+                const nombre = item.nombre || item.ref || "(sin nombre)";
+                const ref = item.ref || "";
+                const tipo = item.tipo || "";
+                o.textContent = `${nombre} (${ref}) [${tipo}]`;
+            }
+
+            this.refSelect.appendChild(o);
+        }, this);
+    },
+
+    renderTesauroList() {
+    if (!this.tesauroList) return;
+
+    this.tesauroList.innerHTML = "";
+
+    // 🔍 leer el término de búsqueda directamente del input
+    const searchInput = this.modal
+        ? this.modal.querySelector("#letTesauroSearch")
+        : null;
+
+    const term = searchInput
+        ? (searchInput.value || "").trim().toLowerCase()
+        : "";
+
+    // Lista base: solo tesauros numero / moneda / si_no (ya filtrados en buildTesauroFields)
+    let lista = this.tesauroFields || [];
+
+    // Aplicar filtro por nombre o referencia
+    if (term) {
+        lista = lista.filter((field) => {
+            const nombre = (field.nombre || "").toLowerCase();
+            const ref    = (field.ref || "").toLowerCase();
+            return nombre.includes(term) || ref.includes(term);
+        });
+    }
+
+    if (!lista.length) {
+        const p = document.createElement("div");
+        p.style.fontSize = "12px";
+        p.style.color = "#6b7280";
+        p.style.padding = "4px 6px";
+        p.textContent = term
+            ? "No hay tesauros que coincidan con la búsqueda."
+            : "No hay tesauros numéricos / moneda / si_no definidos.";
+        this.tesauroList.appendChild(p);
+        return;
+    }
+
+    // ⚠️ A partir de aquí es lo que ya tenías, solo que usando `lista` en vez de `this.tesauroFields`
+    lista.forEach((field) => {
+        const ref    = field.ref || "";
+        const nombre = field.nombre || ref || "(sin nombre)";
+        const tipo   = field.tipo || "";
+        const token  = field.token || ref || "";
+
+        const item = document.createElement("div");
+        item.style.padding = "4px 6px";
+        item.style.borderRadius = "4px";
+        item.style.cursor = "pointer";
+        item.style.display = "flex";
+        item.style.flexDirection = "column";
+        item.style.gap = "2px";
+        item.style.marginBottom = "2px";
+
+        item.addEventListener("mouseenter", () => {
+            item.style.background = "#e5effe";
+        });
+        item.addEventListener("mouseleave", () => {
+            item.style.background = "transparent";
+        });
+
+        // Clic → insertar alias en fórmula (solo destino numérico, igual que antes)
+        item.addEventListener("click", () => {
+            if (!ref) return;
+            if (!this.isNumericDest()) return;
+            if (!token) return;
+            this.insertTokenInFormula(token);
+        });
+
+        const line1 = document.createElement("div");
+        line1.textContent = nombre;
+        line1.style.fontWeight = "500";
+        line1.style.color = "#111827";
+        line1.style.fontSize = "12px";
+
+        const line2 = document.createElement("div");
+        line2.textContent = `${token}  →  ${ref} [${tipo}]`;
+        line2.style.fontSize = "11px";
+        line2.style.color = "#6b7280";
+
+        item.appendChild(line1);
+        item.appendChild(line2);
+
+        this.tesauroList.appendChild(item);
+    });
+}
+
+,
+
+    /* =======================================
+       Variables (definition, numeric)
+       extraídas del texto del editor
+    ======================================= */
+    buildDefinitionVars() {
+        this.definitionVars = [];
+
+        const ta = this.textarea;
+        if (!ta) return;
+
+        const text = ta.value || "";
+
+        const regex = /\{\{\s*definition\b[^}]*\}\}/gi;
+        let m;
+
+        const usedTokens = new Set(Object.keys(this.tokenMap || {}));
+
+        while ((m = regex.exec(text)) !== null) {
+            const block = m[0];
+            const inner = block.slice(2, -2); // quitar {{ }}
+
+            const refMatch  = inner.match(/reference\s*:\s*([^\|\}]+)/i);
+            const typeMatch = inner.match(/type\s*:\s*([^\|\}]+)/i);
+
+            if (!refMatch || !typeMatch) continue;
+
+            let ref  = refMatch[1].trim();
+            let type = typeMatch[1].trim().toLowerCase();
+
+            if (type !== "numeric") continue;
+
+            const safeRef = this.sanitizeId(ref, ref || "Variable");
+
+            // alias visible en fórmula = referencia
+            let token = safeRef;
+            let baseToken = token;
+            let i = 2;
+            while (usedTokens.has(token)) {
+                token = baseToken + "_" + i++;
+            }
+            usedTokens.add(token);
+
+            this.definitionVars.push({
+                ref: safeRef,
+                token: token,
+                type: "numeric"
+            });
+
+            // mapping alias → variable.REF
+            this.tokenMap[token] = { kind: "variable", ref: safeRef };
+        }
+    },
+
+    renderDefinitionList() {
+        if (!this.defList) return;
+
+        this.defList.innerHTML = "";
+
+        if (!this.definitionVars.length) {
+            const p = document.createElement("div");
+            p.style.fontSize = "12px";
+            p.style.color = "#6b7280";
+            p.style.padding = "4px 6px";
+            p.textContent = "No hay variables {{definition}} de tipo numeric.";
+            this.defList.appendChild(p);
+            return;
+        }
+
+        this.definitionVars.forEach((v) => {
+            const item = document.createElement("div");
+            item.style.padding = "4px 6px";
+            item.style.borderRadius = "4px";
+            item.style.cursor = "pointer";
+            item.style.display = "flex";
+            item.style.flexDirection = "column";
+            item.style.gap = "2px";
+            item.style.marginBottom = "2px";
+
+            item.addEventListener("mouseenter", () => {
+                item.style.background = "#dbeafe";
+            });
+            item.addEventListener("mouseleave", () => {
+                item.style.background = "transparent";
+            });
+
+            item.addEventListener("click", () => {
+                if (!this.isNumericDest()) return;
+                if (!v.token) return;
+                this.insertTokenInFormula(v.token);
+            });
+
+            const line1 = document.createElement("div");
+            line1.textContent = v.ref;
+            line1.style.fontWeight = "500";
+            line1.style.color = "#111827";
+            line1.style.fontSize = "12px";
+
+            const line2 = document.createElement("div");
+            line2.textContent = `variable.${v.ref} [numeric]`;
+            line2.style.fontSize = "11px";
+            line2.style.color = "#6b7280";
+
+            item.appendChild(line1);
+            item.appendChild(line2);
+
+            this.defList.appendChild(item);
+        });
+    },
+
+    /* =======================================
+       Cambio tesauro destino
+    ======================================= */
+    onChangeRefSelect() {
+        if (!this.refSelect || !this.refInput) return;
+
+        const idxStr = this.refSelect.value;
+        const selectedOption = this.refSelect.options[this.refSelect.selectedIndex];
+        const selectedKind = selectedOption ? selectedOption.dataset.kind : null;
+
+        this.currentDestField = null;
+        if (selectedKind === "variable") {
+            this.destRefKind = "variable";
+            if (this.refTargetSelect) {
+                this.refTargetSelect.value = "variable";
+            }
+        } else if (selectedKind === "tesauro") {
+            this.destRefKind = "personalized";
+            if (this.refTargetSelect) {
+                this.refTargetSelect.value = "personalized";
+            }
+        }
+
+        if (!idxStr) {
+            this.refInput.disabled = false;
+            this.updateFormulaUIForDestType();
+            this.updateRefHint();
+            return;
+        }
+
+        const idx = parseInt(idxStr, 10);
+        const sourceList = selectedKind === "variable" ? this.definitionVars : this.tesauroFields;
+        const field = sourceList[idx];
+
+        if (!field) {
+            this.refInput.disabled = false;
+            this.updateFormulaUIForDestType();
+            this.updateRefHint();
+            return;
+        }
+
+        const ref = field.ref || "";
+        this.refInput.value = ref;
+        this.refInput.disabled = true;
+
+        this.currentDestField = selectedKind === "variable" ? { tipo: "variable" } : field;
+        this.updateFormulaUIForDestType();
+        this.updateRefHint();
+    },
+
+    onChangeRefTarget() {
+        const sel = this.refTargetSelect;
+        if (!sel) return;
+
+        const val = sel.value === "variable" ? "variable" : "personalized";
+        this.destRefKind = val;
+
+        if (val === "variable") {
+            this.currentDestField = { tipo: "variable" };
+            if (this.refSelect) {
+                this.refSelect.value = "";
+            }
+            if (this.refInput) {
+                this.refInput.disabled = false;
+            }
+        } else {
+            this.currentDestField = null;
+        }
+
+        this.populateRefSelect();
+        this.updateFormulaUIForDestType();
+        this.updateRefHint();
+    },
+
+    /* =======================================
+       Buscar LET bajo cursor / selección
+    ======================================= */
+    findLetAtPosition(text, selStart, selEnd) {
+        if (selStart == null || selEnd == null) {
+            return null;
+        }
+        const re = /\{\{\s*let\b[^}]*\}\}/gi;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+            const start = m.index;
+            const end   = start + m[0].length;
+
+            // ¿intersección con selección/caret?
+            const intersects =
+                (selStart >= start && selStart <= end) ||
+                (selEnd   >= start && selEnd   <= end) ||
+                (selStart <= start && selEnd   >= end);
+
+            if (intersects) {
+                return {
+                    start: start,
+                    end: end,
+                    text: m[0]
+                };
+            }
+        }
+        return null;
+    },
+
+    /* =======================================
+       Rellenar modal desde un LET existente
+    ======================================= */
+    prefillFromExistingLet(letMatch) {
+        if (!letMatch || !letMatch.text) return;
+
+        const raw = letMatch.text;
+        // quitar {{ y }}
+        let inner = raw.trim();
+        if (inner.startsWith("{{")) inner = inner.slice(2);
+        if (inner.endsWith("}}")) inner = inner.slice(0, -2);
+        inner = inner.trim();
+
+        // extraer reference: ... | result: ...
+        const m = inner.match(/reference\s*:\s*([^\|]+?)\s*\|\s*result\s*:\s*([\s\S]*)$/i);
+        if (!m) return;
+
+        let refPart    = (m[1] || "").trim();
+        let formulaRaw = (m[2] || "").trim();
+        // Leer decimals:N
+        const decimalsMatch = inner.match(/decimals\s*:\s*([0-9]+)/i);
+        if (decimalsMatch && this.decimalsInput) {
+            this.decimalsInput.value = decimalsMatch[1].trim();
+        }
+
+        // Leer zeroIfNull:true
+        const zMatch = inner.match(/zeroIfNull\s*:\s*true/i);
+        if (this.zeroIfNullInput) {
+            this.zeroIfNullInput.checked = !!zMatch;
+        }
+
+        // Reference: puede venir como personalized.REF
+        let destRef = refPart;
+        this.destRefKind = "personalized";
+        if (/^personalized\./i.test(destRef)) {
+            destRef = destRef.replace(/^personalized\./i, "").trim();
+        } else if (/^variable\./i.test(destRef)) {
+            destRef = destRef.replace(/^variable\./i, "").trim();
+            this.destRefKind = "variable";
+            this.currentDestField = { tipo: "variable" };
+        }
+
+        // Rellenar referencia destino
+        if (this.refInput) {
+            this.refInput.value = destRef;
+            this.refInput.disabled = false;
+        }
+        if (this.refSelect) {
+            this.refSelect.value = "";
+        }
+        if (this.refTargetSelect) {
+            this.refTargetSelect.value = this.destRefKind;
+        }
+        this.currentDestField = null;
+
+        // Ajustar opciones según el tipo de destino detectado
+        this.populateRefSelect();
+
+        // Intentar casar con un tesauro destino
+        let destFieldIndex = -1;
+        let destVariableIndex = -1;
+        if (this.destRefKind === "variable") {
+            destVariableIndex = this.definitionVars.findIndex((v) => v.ref === destRef);
+        }
+        if (this.destRefKind !== "variable") {
+            for (let i = 0; i < this.tesauroFields.length; i++) {
+                if (this.tesauroFields[i].ref === destRef) {
+                    destFieldIndex = i;
+                    break;
+                }
+            }
+        }
+        if (this.refSelect) {
+            if (destVariableIndex >= 0 && this.destRefKind === "variable") {
+                this.refSelect.value = String(destVariableIndex);
+                this.currentDestField = { tipo: "variable" };
+                if (this.refInput) {
+                    this.refInput.value = destRef;
+                    this.refInput.disabled = true;
+                }
+            } else if (destFieldIndex >= 0) {
+                this.refSelect.value = String(destFieldIndex);
+                const field = this.tesauroFields[destFieldIndex];
+                this.currentDestField = field;
+                if (this.refInput) {
+                    this.refInput.value = field.ref || destRef;
+                    this.refInput.disabled = true;
+                }
+            }
+        }
+
+        // Reconstruir fórmula amigable:
+        // 1) personalized.REF → alias de tesauro (token)
+        let formula = formulaRaw;
+
+        this.tesauroFields.forEach((field) => {
+            const ref   = field.ref || "";
+            const token = field.token || "";
+            if (!ref || !token) return;
+            const re = new RegExp("\\bpersonalized\\." + this.escapeRegex(ref) + "\\b", "g");
+            formula = formula.replace(re, token);
+        });
+
+        // 2) variable.REF → REF (referencia de variable)
+        formula = formula.replace(/variable\.([A-Za-z0-9_]+)/g, (match, varRef) => {
+            return varRef || match;
+        });
+
+        if (this.formulaInput) {
+            this.formulaInput.value = formula;
+        }
+
+        // Ajustar UI (booleana / numérica según destino)
+        this.updateFormulaUIForDestType();
+        this.updateRefHint();
+    },
+
+    /* =======================================
+       Abrir / cerrar modal
+    ======================================= */
+    openModal() {
+        const ta = this.textarea;
+        if (!ta || !this.modal) return;
+
+        ta.focus();
+        const selStart = ta.selectionStart != null ? ta.selectionStart : 0;
+        const selEnd   = ta.selectionEnd   != null ? ta.selectionEnd   : selStart;
+
+        // posición por defecto para insertar si es un LET nuevo
+        this.caretPos        = selStart;
+        this.editingLetRange = null;
+        this.currentDestField = null;
+        this.tokenMap = {};
+        this.definitionVars = [];
+        this.destRefKind = "personalized";
+
+        // Construir tesauros + alias (rellena tokenMap)
+        this.buildTesauroFields();
+
+        // Construir variables definition (también añade a tokenMap)
+        this.buildDefinitionVars();
+
+        this.populateRefSelect();
+
+        // ¿Hay un LET bajo el cursor/selección?
+        const text = ta.value || "";
+        const existingLet = this.findLetAtPosition(text, selStart, selEnd);
+        const isEditing = !!existingLet;
+
+        if (isEditing) {
+            // Sustituiremos este rango al aplicar
+            this.editingLetRange = {
+                start: existingLet.start,
+                end: existingLet.end
+            };
+        } else {
+            this.editingLetRange = null;
+        }
+
+        // Render listas (se verán igual en modo nuevo o edición)
+        this.renderTesauroList();
+        this.renderDefinitionList();
+
+        // Reset inputs base
+        if (this.refInput) {
+            this.refInput.disabled = false;
+            this.refInput.value = "";
+        }
+        if (this.refSelect) {
+            this.refSelect.value = "";
+        }
+        if (this.refTargetSelect) {
+            this.refTargetSelect.value = this.destRefKind;
+        }
+        if (this.formulaInput) {
+            this.formulaInput.value = "";
+            this.formulaInput.disabled = false;
+        }
+        if (this.zeroIfNullInput) this.zeroIfNullInput.checked = false;
+        if (this.decimalsInput)   this.decimalsInput.value = "";
+        this.updateRefHint();
+        // Si estamos editando un LET → precargar datos
+        if (isEditing) {
+            this.prefillFromExistingLet(existingLet);
+        } else {
+            // Si no hay LET, reset de UI (sin destino = herramientas numéricas apagadas)
+            this.updateFormulaUIForDestType();
+        }
+
+        this.modal.style.display = "flex";
+
+        const self = this;
+        setTimeout(function () {
+            if (self.refInput) {
+                self.refInput.focus();
+                self.refInput.select();
+            }
+        }, 0);
+    },
+
+    closeModal() {
+        if (this.modal) {
+            this.modal.style.display = "none";
+        }
+    },
+
+    /* =======================================
+       Insertar token en fórmula
+    ======================================= */
+    insertTokenInFormula(token) {
+        const ta = this.formulaInput;
+        if (!ta) return;
+
+        ta.focus();
+        const start = ta.selectionStart || 0;
+        const end   = ta.selectionEnd || start;
+
+        const before = ta.value.slice(0, start);
+        const after  = ta.value.slice(end);
+
+        ta.value = before + token + after;
+
+        const newPos = start + token.length;
+        ta.selectionStart = ta.selectionEnd = newPos;
+    },
+
+    /* =======================================
+       Utilidades varias
+    ======================================= */
+    sanitizeId(str, fallback) {
+        if (!str) return fallback;
+        let s = String(str).trim();
+        if (!s) return fallback;
+        s = s.replace(/\s+/g, "_").replace(/[^\w]/g, "_");
+        if (!s) return fallback;
+        return s;
+    },
+
+    escapeRegex(str) {
+        return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    },
+
+    updateRefHint() {
+        if (!this.refHint) return;
+        const prefix = this.destRefKind === "variable" ? "variable." : "personalized.";
+        this.refHint.innerHTML =
+            "Se insertará como <code>" + prefix + "&lt;referencia&gt;</code>.";
+    },
+
+    // Sustituir alias por personalized.REF / variable.REF
+    replaceTokenAliases(formula) {
+        if (!this.tokenMap || !Object.keys(this.tokenMap).length) return formula;
+
+        const tokens = Object.keys(this.tokenMap).sort((a, b) => b.length - a.length);
+
+        tokens.forEach((tok) => {
+            const entry = this.tokenMap[tok];
+            if (!entry || !entry.ref) return;
+
+            const re = new RegExp("\\b" + this.escapeRegex(tok) + "\\b", "g");
+            const prefix = entry.kind === "variable" ? "variable." : "personalized.";
+
+            formula = formula.replace(re, prefix + entry.ref);
+        });
+
+        return formula;
+    },
+
+    /* =======================================
+       Aplicar: generar {{let ...}}
+    ======================================= */
+    apply() {
+        const ta = this.textarea;
+        if (!ta || !this.refInput || !this.formulaInput) return;
+
+        let refRaw = this.refInput.value || "";
+        refRaw = refRaw.trim();
+
+        let destKind = this.destRefKind === "variable" ? "variable" : "personalized";
+
+        if (/^personalized\./i.test(refRaw)) {
+            destKind = "personalized";
+            refRaw = refRaw.replace(/^personalized\./i, "").trim();
+        } else if (/^variable\./i.test(refRaw)) {
+            destKind = "variable";
+            refRaw = refRaw.replace(/^variable\./i, "").trim();
+        }
+
+        if (!refRaw) {
+            alert("Debes indicar una referencia destino.");
+            return;
+        }
+
+        const refSan = this.sanitizeId(refRaw, "MiCampoResultado");
+        const fullRef = destKind + "." + refSan;
+
+        this.destRefKind = destKind;
+        if (this.refTargetSelect) {
+            this.refTargetSelect.value = destKind;
+        }
+        if (destKind === "variable" && !this.currentDestField) {
+            this.currentDestField = { tipo: "variable" };
+        }
+
+        let formula = this.formulaInput.value || "";
+        formula = formula.trim();
+
+        const destField = this.currentDestField || null;
+        const destType  = destKind === "variable"
+            ? "variable"
+            : destField && destField.tipo
+                ? String(destField.tipo)
+                : null;
+
+        // si_no → si/sí/no → true/false
+        if (destType === "si_no") {
+            const fLower = formula.toLowerCase();
+            if (fLower === "si" || fLower === "sí" || fLower === "true") {
+                formula = "true";
+            } else if (fLower === "no" || fLower === "false") {
+                formula = "false";
+            }
+        } else {
+            // resto → sustituir alias de tesauros y variables
+            formula = this.replaceTokenAliases(formula);
+        }
+
+        if (!formula) {
+            alert("Debes indicar una fórmula (result).");
+            return;
+        }
+
+        let attributes = 
+                "{{let | reference: " + fullRef +
+                " | result: " + formula;
+
+            if (this.decimalsInput) {
+                const dec = String(this.decimalsInput.value || "").trim();
+                if (dec !== "") {
+                    attributes += " | decimals:" + dec;
+                }
+            }
+
+            if (this.zeroIfNullInput && this.zeroIfNullInput.checked) {
+                attributes += " | zeroIfNull:true";
+            }
+
+            const letBlock = attributes + "}}";
+
+        // Si estábamos editando un LET existente → reemplazar
+        let insertStart, insertEnd;
+        if (this.editingLetRange) {
+            insertStart = this.editingLetRange.start;
+            insertEnd   = this.editingLetRange.end;
+        } else {
+            insertStart = (this.caretPos != null ? this.caretPos : ta.value.length);
+            insertEnd   = insertStart;
+        }
+
+        ta.setRangeText(letBlock, insertStart, insertEnd, "end");
+
+        if (typeof window.recordUndoAfterChange === "function") {
+            recordUndoAfterChange(ta);
+        }
+
+        if (typeof window.updateHighlight === "function") {
+            updateHighlight();
+        }
+
+        this.closeModal();
+    }
+};
+
+/* =======================================
+   Bootstrap
+======================================= */
+(function () {
+    function start() { LetManager.init(); }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", start);
+    } else {
+        start();
+    }
+})();
+window.LetManager = LetManager;

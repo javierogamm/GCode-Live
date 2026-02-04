@@ -1,0 +1,1198 @@
+/* =============================
+   LAYOUT GENERAL
+   ============================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f3f4f6;
+  color: #111827;
+  display: flex;
+  height: 100vh;
+}
+
+/* Panel izquierdo */
+#leftPanel {
+  width: 250px;
+  background: linear-gradient(180deg, #0f172a 0%, #111827 60%, #0b1221 100%);
+  color: #e5e7eb;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-right: 1px solid #0b1221;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.04), 2px 0 12px rgba(0, 0, 0, 0.25);
+}
+
+#leftPanel h2 {
+  margin: 0 0 10px 0;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  color: #f9fafb;
+}
+
+#leftPanel .app-version {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+#leftPanel .btn {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  color: #e5e7eb;
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: transform 0.08s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+#leftPanel .btn:hover {
+  background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+  border-color: #4b5563;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transform: translateY(-2px);
+}
+
+#leftPanel .btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+#leftPanel hr {
+  border: none;
+  border-top: 1px solid #1f2937;
+  margin: 12px 0;
+  opacity: 0.8;
+}
+
+/* Zona central */
+#mainArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.main-title {
+  margin: 0;
+  font-size: 20px;
+  color: #111827;
+}
+
+/* Contenedor de trabajo */
+#workContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  position: relative; /* para overlay + números */
+}
+
+#lineNumbers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 40px;
+  padding: 12px 8px;
+  background: #f8fafc;
+  color: #94a3b8;
+  font-family: Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: right;
+  border-right: 1px solid #e2e8f0;
+  overflow: hidden;
+  user-select: none;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.line-numbers-content {
+  position: relative;
+  will-change: transform;
+}
+
+.line-number {
+  height: 1.4em;
+}
+
+/* Editor markdown único */
+/* TEXTAREA */
+#markdownText {
+    flex: 1;
+    border: 1px solid #ccc;
+    background: transparent;
+    padding: 12px 12px 12px 56px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: Consolas, monospace;
+    resize: none;
+    overflow: auto;
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    line-height: 1.4;
+    position: relative;
+    color: #111;
+    caret-color: #111;
+    z-index: 2;
+}
+
+/* OVERLAY */
+#mdHighlighter {
+    position: absolute;
+    inset: 0;
+    padding: 12px 12px 12px 56px;
+    font-family: Consolas, monospace;
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.4;
+    color: transparent;
+    background: transparent !important;
+    pointer-events: none;
+    overflow: hidden;     /* NO scroll propio */
+    z-index: 1;
+}
+
+/* TESAURO BLOCK */
+.tesauro-block {
+    background: rgba(34, 197, 94, 0.25);
+    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.4);
+    border-radius: 4px;
+    padding: 0;
+    color: transparent;
+}
+
+.function-block {
+    background: rgba(22, 101, 52, 0.25);
+    box-shadow: inset 0 0 0 1px rgba(22, 101, 52, 0.5);
+    border-radius: 4px;
+    padding: 0;
+    color: transparent;
+}
+
+.columns-left-block {
+    background: rgba(216, 180, 254, 0.35);
+    box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.55);
+    border-radius: 4px;
+    padding: 0;
+    color: transparent;
+}
+
+.columns-right-block {
+    background: rgba(199, 210, 254, 0.35);
+    box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.55);
+    border-radius: 4px;
+    padding: 0;
+    color: transparent;
+}
+/* =============================
+   TOOLBAR SUPERIOR
+   ============================= */
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.toolbar button {
+  padding: 6px 10px;
+  font-size: 14px;
+  background: #f9fafb;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.toolbar button:hover {
+  background: #e5e7eb;
+  transform: translateY(-1px);
+}
+
+.toolbar .separator {
+  width: 1px;
+  background: #cbd5e1;
+  margin: 0 8px;
+}
+
+/* === TESAURO: estilos panel lateral y botón flotante === */
+
+#floatingActionRow {
+  position: sticky;
+  top: 0;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+  padding: 4px 0;
+  z-index: 10;
+}
+
+.floating-action-btn,
+.floating-tesauro-btn {
+  padding: 8.5px 14px;
+  border-radius: 999px;
+  border: none;
+  background: #E34850;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.floating-action-btn:hover,
+.floating-tesauro-btn:hover {
+  background: #ff5f68;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 15px rgba(0,0,0,0.35);
+}
+/* === Nuevo botón verde versión pastilla === */
+#btnTesauroManagerFloating {
+  position: fixed;
+  right: 175px;
+  top: 15px;
+  z-index: 99999;
+
+  padding: 10px 14px;          /* mismo tamaño que el botón de tesauro */
+  border-radius: 999px;        /* forma pastilla */
+  border: none;
+  background: #22c55e;         /* verde */
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3); /* igual al tesauro */
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Hover igual al gestor verde */
+#btnTesauroManagerFloating:hover {
+  background: #4ade80; /* verde más vivo */
+  transform: scale(1.05);
+  box-shadow: 0 6px 15px rgba(0,0,0,0.35);
+}
+
+.tesauro-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 340px;
+  height: 100vh;
+  background: #020617;
+  color: #e5e7eb;
+  box-shadow: -4px 0 10px rgba(0,0,0,0.35);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+
+.tesauro-panel.visible {
+  transform: translateX(0);
+}
+
+.tesauro-panel h3 {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 16px;
+  background: #020617;
+  border-bottom: 1px solid #1f2937;
+}
+
+.tesauro-panel-inner {
+  padding: 10px 12px;
+  overflow-y: auto;
+  flex: 1;
+  font-size: 13px;
+}
+
+.tesauro-panel-section {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1f2937;
+}
+
+.tesauro-panel-section h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #f9fafb;
+}
+
+.tesauro-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.tesauro-form-row label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.tesauro-form-row input,
+.tesauro-form-row select {
+  padding: 4px 6px;
+  border-radius: 4px;
+  border: 1px solid #4b5563;
+  background: #020617;
+  color: #e5e7eb;
+  font-size: 12px;
+}
+
+.tesauro-form-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tesauro-btn {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+
+.tesauro-btn-primary {
+  background: #10b981;
+  color: #ecfdf5;
+}
+
+.tesauro-btn-secondary {
+  background: #374151;
+  color: #e5e7eb;
+}
+
+.tesauro-btn-primary:hover {
+  background: #059669;
+}
+
+.tesauro-btn-secondary:hover {
+  background: #4b5563;
+}
+
+.tesauro-panel-footer {
+  padding: 8px 12px;
+  border-top: 1px solid #1f2937;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* Grupos y elementos */
+
+.tesauro-group {
+  margin-bottom: 8px;
+}
+
+.tesauro-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 4px 6px;
+  cursor: pointer;
+  background: #020617;
+  border: 1px solid #1f2937;
+  border-radius: 4px;
+}
+
+.tesauro-group-header span:last-child {
+  opacity: 0.7;
+}
+
+.tesauro-group-body {
+  margin-top: 4px;
+}
+
+.tesauro-item {
+  border-radius: 4px;
+  border: 1px solid #1f2937;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  background: #020617;
+}
+
+.drag-pill {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px dashed #60a5fa;
+  font-size: 11px;
+  margin-bottom: 4px;
+  cursor: grab;
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+.tesauro-item-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.tesauro-item-name {
+  font-size: 11px;
+  color: #e5e7eb;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tesauro-mini-btn {
+  border: none;
+  background: #111827;
+  color: #e5e7eb;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tesauro-mini-btn:hover {
+  background: #1f2937;
+}
+
+/* Modal TesauroManager (estructura base; el resto va inline) */
+#tesauroManagerModal {
+  font-family: inherit;
+}
+
+/* === TESAURO PANEL BLANCO (override) === */
+
+.tesauro-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 360px;
+  height: 100vh;
+  background: #ffffff !important;
+  color: #1f2937 !important;
+  border-left: 1px solid #e5e7eb;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.1);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+
+.tesauro-panel.visible {
+  transform: translateX(0);
+}
+
+.tesauro-panel h3 {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 16px;
+  background: #f9fafb !important;
+  border-bottom: 1px solid #e5e7eb;
+  color: #111827;
+}
+
+.tesauro-panel-inner {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.tesauro-panel-section {
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tesauro-panel-section h4 {
+  color: #111827;
+}
+
+.tesauro-form-row label {
+  color: #4b5563;
+}
+
+.tesauro-form-row input,
+.tesauro-form-row select {
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  border-radius: 6px;
+}
+
+.tesauro-btn-primary {
+  background: #2563eb !important;
+  color: white;
+}
+
+.tesauro-btn-secondary {
+  background: #f3f4f6 !important;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+}
+
+.tesauro-panel-footer {
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  color: #6b7280;
+}
+
+.tesauro-group-header {
+  background: #f3f4f6 !important;
+  border: 1px solid #e5e7eb !important;
+  color: #111827;
+}
+
+.tesauro-group-body .tesauro-item {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.drag-pill {
+  border: 1px dashed #60a5fa !important;
+  background: #eff6ff !important;
+  color: #1e3a8a !important;
+}
+
+.tesauro-item-name {
+  color: #1f2937 !important;
+}
+
+.tesauro-mini-btn {
+  background: #f3f4f6 !important;
+  border: 1px solid #e5e7eb;
+  color: #374151 !important;
+}
+
+/* === TESAURO MANAGER BLANCO === */
+
+#tesauroManagerModal > div {
+  background: #ffffff !important;
+  color: #1f2937 !important;
+  width: 95% !important;
+  max-width: 1400px !important;
+  max-height: 95vh !important;
+  border-radius: 12px !important;
+}
+
+/* Header */
+#tesauroManagerModal h2 {
+  color: #111827 !important;
+}
+
+#tesauroManagerModal > div > div:first-child {
+  background: #f9fafb !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+#tmCloseBtn {
+  background: #e5e7eb !important;
+  color: #111827 !important;
+  border: 1px solid #d1d5db;
+}
+
+/* Tabla */
+#tesauroManagerModal table thead tr {
+  background: #f3f4f6 !important;
+}
+
+#tesauroManagerModal table th {
+  color: #374151 !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+#tesauroManagerModal table td {
+  border-bottom: 1px solid #f3f4f6 !important;
+}
+
+#tesauroManagerModal table input,
+#tesauroManagerModal table select {
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+  color: #111827 !important;
+  border-radius: 6px !important;
+  padding: 6px 8px !important;
+}
+
+/* Panel derecho */
+#tmPasteArea {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #d1d5db !important;
+}
+
+#tmApplyPaste {
+  background: #2563eb !important;
+  color: white !important;
+}
+
+#tmExportJson {
+  background: #16a34a !important;
+  color: white !important;
+}
+
+#tmExportCsv {
+  background: #0ea5e9 !important;
+  color: white !important;
+}
+
+/* Footer */
+#tesauroManagerModal > div > div:last-child {
+  background: #f9fafb !important;
+  border-top: 1px solid #e5e7eb !important;
+}
+/* Bloque de sección (highlight amarillo base) */
+.section-block {
+  border-radius: 4px;
+  padding: 0;
+  background: rgba(237, 237, 9, 0.166);
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.50);
+}
+
+/* Profundidad 1 (más claro) */
+.section-block.section-depth-1 {
+  background: rgba(237, 207, 9, 0.166);
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.30);
+}
+
+/* Profundidad 2 */
+.section-block.section-depth-2 {
+  background: rgba(250, 116, 21, 0.166);
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.40);
+}
+
+/* Profundidad 3 */
+.section-block.section-depth-3 {
+  background: rgba(197, 127, 14, 0.166);
+  box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.55);
+}
+
+/* Profundidad 4 */
+.section-block.section-depth-4 {
+  background: rgba(250, 170, 21, 0.166);
+  box-shadow: inset 0 0 0 1px rgba(146, 64, 14, 0.70);
+}
+
+/* Profundidad 5 (más oscuro) */
+.section-block.section-depth-5 {
+  background: rgba(222, 188, 18, 0.166);
+  box-shadow: inset 0 0 0 1px rgba(120, 53, 15, 0.80);
+}
+.section-error-block {
+  background: rgba(230, 7, 7, 0.575); /* rojito suave */
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.85);
+  border-radius: 4px;
+  padding: 0;
+}
+
+.let-block {
+  background: rgba(37, 99, 235, 0.30);    /* azul tipo cobalt */
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.65);
+  border-radius: 4px;
+  padding: 0;
+  color: transparent; /* seguimos usando el truco de texto transparente */
+}
+.definition-block {
+    background: rgba(120, 160, 255, 0.22);   /* azul muy pálido */
+    border-radius: 3px;
+    padding: 0;
+    box-shadow: inset 0 0 0 1px rgba(120, 160, 255, 0.40);
+}
+
+.tesauro-block,
+.function-block,
+.columns-left-block,
+.columns-right-block,
+.section-block,
+.section-error-block,
+.let-block,
+.definition-block {
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+/* Fila seleccionada en el Gestor de Tesauros */
+#tesauroManagerModal .tm-row-selected {
+    background-color: #e0f2fe;      /* azul clarito pálido */
+}
+
+#tesauroManagerModal .tm-row-selected td {
+    background-color: #e0f2fe;      /* asegura que todas las celdas se pinten igual */
+}
+
+#tesauroManagerModal .tm-row:hover {
+    background-color: #f8fafc;      /* gris/azul muy suave al pasar el ratón */
+
+}
+
+/* =============================
+   GUÍA INTERACTIVA
+   ============================= */
+
+.guide-trigger {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid #111827;
+  background: linear-gradient(135deg, #111827 0%, #0f172a 100%);
+  color: #f9fafb;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  font-size: 13px;
+  z-index: 120001;
+  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.guide-trigger:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #0b1221 0%, #0f172a 100%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.guide-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 120000;
+  pointer-events: none;
+  font-family: inherit;
+}
+
+.guide-layer.active {
+  pointer-events: auto;
+}
+
+.guide-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.guide-layer.active .guide-dim {
+  opacity: 1;
+}
+
+.guide-highlight {
+  position: absolute;
+  border: 2px solid #22c55e;
+  box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.18), 0 16px 36px rgba(0, 0, 0, 0.32);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.guide-layer.active .guide-highlight {
+  opacity: 1;
+}
+
+.guide-tooltip {
+  position: absolute;
+  max-width: 360px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+  padding: 14px 16px;
+  color: #111827;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.guide-layer.active .guide-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.guide-tooltip h4 {
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.guide-tooltip p {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.45;
+}
+
+.guide-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.guide-actions button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #f3f4f6;
+  color: #111827;
+  transition: transform 0.12s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.guide-actions button:hover {
+  transform: translateY(-1px);
+  background: #e5e7eb;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+}
+
+.guide-actions .guide-next {
+  background: #22c55e;
+  color: #f8fafc;
+  box-shadow: 0 10px 24px rgba(34, 197, 94, 0.3);
+}
+
+.guide-actions .guide-next:hover {
+  background: #16a34a;
+}
+
+.guide-actions .guide-exit {
+  background: #0f172a;
+  color: #f9fafb;
+}
+
+.guide-drag-demo {
+  position: fixed;
+  z-index: 120002;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed #22c55e;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  animation: guide-drag-move 4.6s ease-in-out 3;
+}
+
+.guide-drag-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #22c55e;
+  color: #f8fafc;
+  font-size: 14px;
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.35);
+}
+
+.guide-drag-label {
+  font-size: 12px;
+  color: #0f172a;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.guide-drag-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.guide-drag-title {
+  font-size: 13px;
+  color: #0b1526;
+}
+
+.guide-drag-subtitle {
+  font-size: 11px;
+  color: #4b5563;
+}
+
+@keyframes guide-drag-move {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  55% {
+    transform: translate(var(--drag-x, -340px), var(--drag-y, -30px)) scale(1.05);
+    box-shadow: 0 16px 28px rgba(34, 197, 94, 0.28);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+/* =============================
+   MENÚ CONTEXTUAL
+   ============================= */
+
+.context-menu {
+  position: fixed;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.18);
+  z-index: 1250;
+  min-width: 220px;
+}
+
+.context-menu-item {
+  border: none;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.context-menu-item:hover {
+  background: #e2e8f0;
+}
+
+/* =============================
+   MODAL GENÉRICO
+   ============================= */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 18px;
+  backdrop-filter: blur(2px);
+}
+
+.modal-card {
+  background: #ffffff;
+  border-radius: 14px;
+  width: min(720px, 100%);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e5e7eb;
+}
+
+.columns-modal-card {
+  width: min(1200px, 100%);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #475569;
+}
+
+.modal-close:hover {
+  color: #111827;
+}
+
+.modal-body {
+  padding: 14px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.form-row span {
+  font-weight: 600;
+  color: #111827;
+}
+
+.form-row input,
+.form-row select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-row input:focus,
+.form-row select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.columns-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+}
+
+.columns-language-select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.columns-language-select:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+}
+
+.columns-textarea {
+  min-height: 320px;
+  resize: vertical;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 14px;
+  font-family: Consolas, monospace;
+  color: #0f172a;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.columns-textarea:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-primary,
+.btn-secondary {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.32);
+}
+
+.btn-secondary {
+  background: #e5e7eb;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-secondary:hover {
+  background: #f1f5f9;
+}
+
+.csv-doc-only {
+  display: none;
+}
+
+.csv-export-card {
+  max-height: 90vh;
+  overflow: auto;
+}
