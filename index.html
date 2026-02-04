@@ -11,7 +11,34 @@
     <!-- PANEL IZQUIERDO -->
     <div id="leftPanel">
         <h2>Editor Markdown</h2>
-        <div class="app-version">v1.3.27</div>
+        <div class="app-version">v1.3.28</div>
+
+        <div class="user-accordion">
+            <button class="accordion-toggle" id="userAccordionToggle" type="button" aria-expanded="false">
+                <span class="accordion-title">USUARIO</span>
+                <span class="user-summary">
+                    <span id="userStatusDot" class="status-dot" aria-hidden="true"></span>
+                    <span id="userNameLabel">Sin sesión</span>
+                </span>
+            </button>
+            <div class="accordion-panel" id="userAccordionPanel" aria-hidden="true">
+                <p id="userNoSessionMessage" class="auth-muted">
+                    Inicia sesión para ver y editar la información del usuario.
+                </p>
+                <form id="userEditForm" class="user-edit-form">
+                    <label>
+                        Usuario
+                        <input type="text" id="userEditName" autocomplete="off" />
+                    </label>
+                    <label>
+                        Nueva contraseña
+                        <input type="password" id="userEditPass" autocomplete="new-password" />
+                    </label>
+                    <p id="userEditStatus" class="status-message" role="status" aria-live="polite"></p>
+                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                </form>
+            </div>
+        </div>
 
         <button class="btn" id="btnNuevo">📝 Nuevo</button>
         <button class="btn" id="btnPegarAuto">📥 Pegar</button>
@@ -22,6 +49,28 @@
         <button class="btn" id="btnGuardarProyecto">💾 Guardar proyecto</button>
         <button class="btn" id="btnExportCsv">🗂️ Exportar CSV</button>
         <hr>
+    </div>
+
+    <div id="loginModal" class="modal-overlay login-modal" aria-hidden="true">
+        <div class="modal-card login-modal-card" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
+            <div class="modal-header">
+                <h3 id="loginModalTitle">Iniciar sesión</h3>
+            </div>
+            <form id="loginForm" class="modal-body login-modal-body">
+                <label>
+                    Usuario
+                    <input type="text" id="loginUserInput" autocomplete="username" required />
+                </label>
+                <label>
+                    Contraseña
+                    <input type="password" id="loginPassInput" autocomplete="current-password" required />
+                </label>
+                <p id="loginStatus" class="status-message" role="status" aria-live="polite"></p>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary">Ingresar</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- ZONA CENTRAL -->
@@ -63,6 +112,7 @@
 
     </div>
 
+    <script src="js/core/auth.js"></script>
     <script src="js/core/editormarkdown.js"></script>
     <script src="js/features/sections.js"></script>
     <script src="js/features/let.js"></script>
