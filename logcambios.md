@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.27 - 2026-02-25
+- Se añadió el botón "Guardar proyecto" con modal para organizar flujos por subfunción y asignar nombre antes de guardar.
+- Se incorporó la integración con Supabase para listar subfunciones, consultar flujos y almacenar el JSON del proyecto.
+
 ## v1.3.26 - 2026-02-24
 - El gestor de tesauros ahora importa tesauros desde copypaste, incluyendo el flujo de configuración de selectores.
 

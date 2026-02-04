@@ -11,6 +11,7 @@ const btnCopiar = document.getElementById("btnCopiar");
 const btnDescargar = document.getElementById("btnDescargar");
 const btnExportProyecto = document.getElementById("btnExportProyecto");
 const btnImportProyecto = document.getElementById("btnImportProyecto");
+const btnGuardarProyecto = document.getElementById("btnGuardarProyecto");
 const btnExportCsv = document.getElementById("btnExportCsv");
 
 function ensureLineNumbersContent() {
@@ -58,6 +59,28 @@ function ensureFloatingActionRow() {
 
 // Exponer helper para otros módulos
 window.ensureFloatingActionRow = ensureFloatingActionRow;
+
+function applyProjectData(data) {
+    if (data && typeof data.markdown === "string") {
+        const ta = document.getElementById("markdownText");
+        if (ta) {
+            ta.value = data.markdown;
+            if (typeof window.updateHighlight === "function") {
+                updateHighlight();
+            }
+            updateLineNumbers();
+        }
+    }
+
+    if (data && Array.isArray(data.tesauros) && window.DataTesauro) {
+        DataTesauro.campos = data.tesauros;
+        if (typeof DataTesauro.renderList === "function") {
+            DataTesauro.renderList();
+        } else if (typeof DataTesauro.render === "function") {
+            DataTesauro.render();
+        }
+    }
+}
 if (btnExportProyecto) {
     btnExportProyecto.addEventListener("click", () => {
         const textarea = document.getElementById("markdownText");
@@ -103,29 +126,7 @@ if (btnImportProyecto) {
                     const data = JSON.parse(raw);
 
                     // 1) Restaurar markdown
-                    if (data && typeof data.markdown === "string") {
-                        const ta = document.getElementById("markdownText");
-                        if (ta) {
-                            ta.value = data.markdown;
-
-                            // Si tienes resaltado/preview, lo actualizamos
-                            if (typeof window.updateHighlight === "function") {
-                                updateHighlight();
-                            }
-                            updateLineNumbers();
-                        }
-                    }
-
-                    // 2) Restaurar tesauros completos
-                    if (data && Array.isArray(data.tesauros) && window.DataTesauro) {
-                        DataTesauro.campos = data.tesauros;
-
-                        if (typeof DataTesauro.renderList === "function") {
-                            DataTesauro.renderList();
-                        } else if (typeof DataTesauro.render === "function") {
-                            DataTesauro.render();
-                        }
-                    }
+                    applyProjectData(data);
 
                     alert("✔ Proyecto importado correctamente.");
                 } catch (err) {
@@ -138,6 +139,276 @@ if (btnImportProyecto) {
         });
 
         input.click();
+    });
+}
+
+const saveProjectState = {
+    modal: null,
+    subfunciones: [],
+    selectedSubfuncion: "",
+    projects: []
+};
+
+function ensureSaveProjectModal() {
+    if (saveProjectState.modal) return saveProjectState.modal;
+
+    const modal = document.createElement("div");
+    modal.id = "saveProjectModal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-card save-project-modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3>Guardar JSON en base de datos</h3>
+                    <p class="muted">Organiza los flujos en carpetas por subfunción.</p>
+                </div>
+                <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="modal-body save-project-body">
+                <div class="save-project-sidebar">
+                    <h4>Subfunciones</h4>
+                    <button type="button" class="save-project-add-btn" data-action="add-subfuncion">Crear subfunción</button>
+                    <div class="save-project-folder-list" id="saveProjectFolderList"></div>
+                </div>
+                <div class="save-project-main">
+                    <div class="save-project-input-row">
+                        <input id="saveProjectSubfuncionInput" type="text" placeholder="Subfunción seleccionada" />
+                        <input id="saveProjectNameInput" type="text" placeholder="Nombre del flujo" />
+                    </div>
+                    <div class="save-project-list" id="saveProjectList"></div>
+                    <div class="save-project-status" id="saveProjectStatus"></div>
+                    <div class="save-project-footer">
+                        <button type="button" class="save-project-save-btn" data-action="guardar">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector(".modal-close");
+    const statusEl = modal.querySelector("#saveProjectStatus");
+    const folderList = modal.querySelector("#saveProjectFolderList");
+    const subfuncionInput = modal.querySelector("#saveProjectSubfuncionInput");
+    const nameInput = modal.querySelector("#saveProjectNameInput");
+    const saveBtn = modal.querySelector("[data-action='guardar']");
+    const addBtn = modal.querySelector("[data-action='add-subfuncion']");
+
+    const setStatus = (msg, isError = true) => {
+        if (!statusEl) return;
+        statusEl.textContent = msg || "";
+        statusEl.style.color = isError ? "#b91c1c" : "#15803d";
+    };
+
+    const renderSubfunciones = () => {
+        if (!folderList) return;
+        folderList.innerHTML = "";
+        if (!saveProjectState.subfunciones.length) {
+            folderList.innerHTML = `<div class="muted">Sin subfunciones aún.</div>`;
+            return;
+        }
+        saveProjectState.subfunciones.forEach((sub) => {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "save-project-folder-item" + (sub === saveProjectState.selectedSubfuncion ? " active" : "");
+            item.innerHTML = `📁 ${sub}`;
+            item.addEventListener("click", () => {
+                saveProjectState.selectedSubfuncion = sub;
+                if (subfuncionInput) subfuncionInput.value = sub;
+                renderSubfunciones();
+                loadProjects(sub);
+            });
+            folderList.appendChild(item);
+        });
+    };
+
+    const renderProjects = () => {
+        const list = modal.querySelector("#saveProjectList");
+        if (!list) return;
+        list.innerHTML = "";
+        if (!saveProjectState.projects.length) {
+            list.innerHTML = `<div class="muted">No hay flujos guardados en esta subfunción.</div>`;
+            return;
+        }
+        saveProjectState.projects.forEach((project) => {
+            const row = document.createElement("div");
+            row.className = "save-project-item";
+            const name = document.createElement("span");
+            name.textContent = project.nombre || "Sin nombre";
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "save-project-use-btn";
+            button.textContent = "Usar nombre";
+            button.addEventListener("click", async () => {
+                if (!nameInput) return;
+                nameInput.value = project.nombre || "";
+                if (project.id) {
+                    try {
+                        setStatus("Cargando flujo...", false);
+                        const response = await fetch(`/api/project?id=${encodeURIComponent(project.id)}`);
+                        if (!response.ok) {
+                            throw new Error("No se pudo cargar el flujo.");
+                        }
+                        const payload = await response.json();
+                        if (payload && payload.procedimiento) {
+                            applyProjectData(payload.procedimiento);
+                            setStatus("Flujo cargado en el editor.", false);
+                        } else {
+                            setStatus("No se encontró contenido en el flujo seleccionado.");
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        setStatus("No se pudo cargar el flujo.");
+                    }
+                }
+            });
+            row.appendChild(name);
+            row.appendChild(button);
+            list.appendChild(row);
+        });
+    };
+
+    const loadSubfunciones = async () => {
+        try {
+            setStatus("Cargando subfunciones...", false);
+            const response = await fetch("/api/subfunciones");
+            if (!response.ok) {
+                throw new Error("Error al cargar subfunciones.");
+            }
+            const data = await response.json();
+            saveProjectState.subfunciones = Array.isArray(data) ? data : [];
+            renderSubfunciones();
+            setStatus("");
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudieron cargar subfunciones.");
+        }
+    };
+
+    const loadProjects = async (subfuncion) => {
+        if (!subfuncion) {
+            saveProjectState.projects = [];
+            renderProjects();
+            return;
+        }
+        try {
+            setStatus("Cargando flujos...", false);
+            const response = await fetch(`/api/projects?subfuncion=${encodeURIComponent(subfuncion)}`);
+            if (!response.ok) {
+                throw new Error("Error al cargar flujos.");
+            }
+            const data = await response.json();
+            saveProjectState.projects = Array.isArray(data) ? data : [];
+            renderProjects();
+            setStatus("");
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudieron cargar los flujos.");
+        }
+    };
+
+    if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+            modal.style.display = "none";
+        });
+    }
+
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) modal.style.display = "none";
+    });
+
+    if (addBtn) {
+        addBtn.addEventListener("click", () => {
+            if (!subfuncionInput) return;
+            const value = subfuncionInput.value.trim();
+            if (!value) {
+                setStatus("Escribe un nombre de subfunción para crearla.");
+                return;
+            }
+            if (!saveProjectState.subfunciones.includes(value)) {
+                saveProjectState.subfunciones = [value, ...saveProjectState.subfunciones];
+            }
+            saveProjectState.selectedSubfuncion = value;
+            renderSubfunciones();
+            loadProjects(value);
+            setStatus("");
+        });
+    }
+
+    if (saveBtn) {
+        saveBtn.addEventListener("click", async () => {
+            const nombre = nameInput ? nameInput.value.trim() : "";
+            const subfuncion = subfuncionInput ? subfuncionInput.value.trim() : "";
+            if (!subfuncion) {
+                setStatus("Selecciona o crea una subfunción.");
+                return;
+            }
+            if (!nombre) {
+                setStatus("Indica el nombre del flujo.");
+                return;
+            }
+            const markdown = markdownText ? markdownText.value : "";
+            const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
+                ? DataTesauro.campos
+                : [];
+            const procedimiento = {
+                markdown,
+                tesauros
+            };
+            try {
+                setStatus("Guardando flujo...", false);
+                const response = await fetch("/api/projects", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ nombre, subfuncion, procedimiento })
+                });
+                if (!response.ok) {
+                    throw new Error("Error al guardar el flujo.");
+                }
+                setStatus("Flujo guardado correctamente.", false);
+                saveProjectState.selectedSubfuncion = subfuncion;
+                if (!saveProjectState.subfunciones.includes(subfuncion)) {
+                    saveProjectState.subfunciones = [subfuncion, ...saveProjectState.subfunciones];
+                }
+                renderSubfunciones();
+                loadProjects(subfuncion);
+            } catch (error) {
+                console.error(error);
+                setStatus("No se pudo guardar el flujo.");
+            }
+        });
+    }
+
+    modal.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            modal.style.display = "none";
+        }
+    });
+
+    saveProjectState.modal = modal;
+    modal.loadSubfunciones = loadSubfunciones;
+    modal.loadProjects = loadProjects;
+    modal.renderSubfunciones = renderSubfunciones;
+    return modal;
+}
+
+if (btnGuardarProyecto) {
+    btnGuardarProyecto.addEventListener("click", () => {
+        const modal = ensureSaveProjectModal();
+        const subfuncionInput = modal.querySelector("#saveProjectSubfuncionInput");
+        const nameInput = modal.querySelector("#saveProjectNameInput");
+        if (subfuncionInput) subfuncionInput.value = saveProjectState.selectedSubfuncion || "";
+        if (nameInput) nameInput.value = "";
+        modal.style.display = "flex";
+        if (typeof modal.loadSubfunciones === "function") {
+            modal.loadSubfunciones();
+        }
+        if (saveProjectState.selectedSubfuncion && typeof modal.loadProjects === "function") {
+            modal.loadProjects(saveProjectState.selectedSubfuncion);
+        }
     });
 }
 
