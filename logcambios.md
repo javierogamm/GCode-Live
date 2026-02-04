@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.28 - 2026-02-26
+- Se incorporó un login basado en la tabla `users` para bloquear el editor hasta autenticar al usuario.
+- Se añadió un acordeón de usuario en el panel izquierdo con estado visual y edición de nombre/contraseña.
+- Se agregó un endpoint API para validar credenciales y actualizar datos del usuario desde la interfaz.
+
 ## v1.3.27 - 2026-02-25
 - Se añadió el botón "Guardar proyecto" con modal para organizar flujos por subfunción y asignar nombre antes de guardar.
 - Se incorporó la integración con Supabase para listar subfunciones, consultar flujos y almacenar el JSON del proyecto.

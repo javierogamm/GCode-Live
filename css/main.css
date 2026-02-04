@@ -1349,3 +1349,135 @@ body {
   max-height: 90vh;
   overflow: auto;
 }
+
+/* =======================================
+   AUTENTICACIÓN Y USUARIO
+======================================= */
+
+body.is-locked #leftPanel,
+body.is-locked #mainArea {
+  pointer-events: none;
+  user-select: none;
+  filter: grayscale(0.2) blur(0.5px);
+}
+
+.login-modal {
+  display: none;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000001;
+}
+
+.login-modal-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 8px 0;
+}
+
+.login-modal-body {
+  display: grid;
+  gap: 14px;
+}
+
+.login-modal-body label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.login-modal-body input {
+  border-radius: 6px;
+  border: 1px solid #cdd6f3;
+  padding: 10px 12px;
+  background: #eaf1ff;
+}
+
+.user-accordion {
+  margin-top: 14px;
+  margin-bottom: 18px;
+  background: #f8f9fd;
+  border: 1px solid #d8def4;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.accordion-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.user-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #344055;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #c9c9c9;
+}
+
+.status-dot.is-online {
+  background: #22c55e;
+}
+
+.accordion-panel {
+  border-top: 1px solid #d8def4;
+  padding: 12px;
+  display: none;
+  background: #ffffff;
+}
+
+.accordion-panel.is-open {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-muted {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.user-edit-form {
+  display: grid;
+  gap: 10px;
+}
+
+.user-edit-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.user-edit-form input {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5f0;
+  background: #f7f8ff;
+}
+
+.status-message {
+  font-size: 12px;
+  margin: 0;
+  min-height: 16px;
+}
+
+.btn-primary {
+  background: #394255;
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: #2f3748;
+}
