@@ -179,6 +179,19 @@ body {
     z-index: 1;
 }
 
+.reference-hit,
+.reference-inline-hit {
+    background: rgba(250, 204, 21, 0.45);
+    box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.85), 0 0 8px rgba(250, 204, 21, 0.6);
+    border-radius: 4px;
+    position: relative;
+    z-index: 2;
+}
+
+.reference-inline-hit {
+    padding: 0 1px;
+}
+
 /* TESAURO BLOCK */
 .tesauro-block {
     background: rgba(34, 197, 94, 0.25);
@@ -210,6 +223,69 @@ body {
     border-radius: 4px;
     padding: 0;
     color: transparent;
+}
+
+.mini-map {
+  position: fixed;
+  right: 16px;
+  bottom: 20px;
+  width: 120px;
+  height: 220px;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.35);
+  display: none;
+  z-index: 35;
+  overflow: hidden;
+}
+
+.mini-map.is-visible {
+  display: block;
+}
+
+.mini-map-base {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.18) 1px,
+    transparent 1px,
+    transparent 5px
+  );
+  opacity: 0.6;
+}
+
+.mini-map-markers {
+  position: absolute;
+  inset: 0;
+}
+
+.mini-map-marker {
+  position: absolute;
+  width: 8px;
+  height: 2px;
+  border-radius: 2px;
+}
+
+.mini-map-marker-section {
+  background: #facc15;
+}
+
+.mini-map-marker-tesauro {
+  background: #4ade80;
+}
+
+.mini-map-marker-let {
+  background: #a78bfa;
+}
+
+.mini-map-marker-reference {
+  background: #fb923c;
+  width: 12px;
+  height: 3px;
+  box-shadow: 0 0 6px rgba(251, 146, 60, 0.9);
 }
 /* =============================
    TOOLBAR SUPERIOR
@@ -243,6 +319,11 @@ body {
 .toolbar button:hover {
   background: #e5e7eb;
   transform: translateY(-1px);
+}
+
+.toolbar button.is-active {
+  background: #dbeafe;
+  border-color: #60a5fa;
 }
 
 .toolbar .separator {

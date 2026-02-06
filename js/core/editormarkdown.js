@@ -1841,6 +1841,186 @@ let highlightSections = true; // amarillo / rojo
 let highlightTesauros = true; // verde
 let highlightLet       = true;
 let highlightColumns   = true;
+let selectedReferenceKey = null;
+const miniMapState = {
+    enabled: false,
+    container: null,
+    base: null,
+    markers: null
+};
+
+function escapeRegex(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeAttr(str) {
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function buildReferenceKey(kind, ref) {
+    if (!kind || !ref) return null;
+    return kind.toLowerCase() + "." + ref.trim().toLowerCase();
+}
+
+function getReferenceAtSelection(text, selectionStart, selectionEnd) {
+    const start = Math.min(selectionStart || 0, selectionEnd || 0);
+    const end = Math.max(selectionStart || 0, selectionEnd || 0);
+    const overlaps = (mStart, mEnd) => Math.max(start, mStart) <= Math.min(end, mEnd);
+
+    const findMatch = (regex, extractor) => {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const mStart = match.index;
+            const mEnd = match.index + match[0].length;
+            if (overlaps(mStart, mEnd)) {
+                return extractor(match);
+            }
+        }
+        return null;
+    };
+
+    const tesauroRef = findMatch(
+        /\{\{\s*(personalized|function)\s*\|\s*reference\s*:[^}]+\}\}/gi,
+        (m) => {
+            const refMatch = m[0].match(/reference\s*:\s*([^}|]+)\s*\}\}/i);
+            const ref = refMatch ? refMatch[1].trim() : "";
+            return buildReferenceKey(m[1], ref);
+        }
+    );
+    if (tesauroRef) return tesauroRef;
+
+    const letRef = findMatch(/\{\{\s*let\b[^}]*\}\}/gi, (m) => {
+        const refMatch = m[0].match(/reference\s*:\s*([^|}]+)/i);
+        if (!refMatch) return null;
+        const rawRef = refMatch[1].trim();
+        let kind = "personalized";
+        let ref = rawRef;
+        const dot = rawRef.indexOf(".");
+        if (dot !== -1) {
+            kind = rawRef.slice(0, dot).trim();
+            ref = rawRef.slice(dot + 1).trim();
+        }
+        return buildReferenceKey(kind, ref);
+    });
+    if (letRef) return letRef;
+
+    const sectionRef = findMatch(/\bpersonalized\.([A-Za-z0-9_]+)\b/gi, (m) =>
+        buildReferenceKey("personalized", m[1])
+    );
+    if (sectionRef) return sectionRef;
+
+    const variableRef = findMatch(/\bvariable\.([A-Za-z0-9_]+)\b/gi, (m) =>
+        buildReferenceKey("variable", m[1])
+    );
+    if (variableRef) return variableRef;
+
+    return null;
+}
+
+function updateSelectedReference() {
+    const current = getReferenceAtSelection(
+        markdownText.value,
+        markdownText.selectionStart || 0,
+        markdownText.selectionEnd || 0
+    );
+    if (current !== selectedReferenceKey) {
+        selectedReferenceKey = current;
+        updateHighlight();
+        updateMiniMap();
+    }
+}
+
+function ensureMiniMap() {
+    if (miniMapState.container) return;
+    const container = document.createElement("div");
+    container.id = "miniMap";
+    container.className = "mini-map";
+    container.innerHTML = `
+        <div class="mini-map-base"></div>
+        <div class="mini-map-markers"></div>
+    `;
+    document.body.appendChild(container);
+    miniMapState.container = container;
+    miniMapState.base = container.querySelector(".mini-map-base");
+    miniMapState.markers = container.querySelector(".mini-map-markers");
+}
+
+function lineHasSelectedReference(line, refKey) {
+    if (!refKey) return false;
+    const [kind, ref] = refKey.split(".");
+    const safeRef = escapeRegex(ref || "");
+    if (!safeRef) return false;
+    if (kind === "personalized") {
+        const inline = new RegExp("\\bpersonalized\\." + safeRef + "\\b", "i");
+        const block = new RegExp("\\{\\{\\s*personalized\\s*\\|\\s*reference\\s*:\\s*" + safeRef + "\\s*\\}\\}", "i");
+        return inline.test(line) || block.test(line);
+    }
+    if (kind === "variable") {
+        return new RegExp("\\bvariable\\." + safeRef + "\\b", "i").test(line);
+    }
+    if (kind === "function") {
+        const block = new RegExp("\\{\\{\\s*function\\s*\\|\\s*reference\\s*:\\s*" + safeRef + "\\s*\\}\\}", "i");
+        return block.test(line) || new RegExp("\\bfunction\\." + safeRef + "\\b", "i").test(line);
+    }
+    return false;
+}
+
+function updateMiniMap() {
+    if (!miniMapState.enabled) return;
+    ensureMiniMap();
+    const text = markdownText.value || "";
+    const lines = text.split(/\n/);
+    const totalLines = Math.max(lines.length, 1);
+
+    if (miniMapState.base) {
+        const mapHeight = miniMapState.container ? miniMapState.container.clientHeight : 0;
+        const lineSize = mapHeight ? Math.max(2, mapHeight / totalLines) : 4;
+        miniMapState.base.style.backgroundSize = "100% " + lineSize + "px";
+    }
+
+    if (miniMapState.markers) {
+        miniMapState.markers.innerHTML = "";
+        const sectionRegex = /\{\{[#\/]section_[^}]*\}\}/i;
+        const tesauroRegex = /\{\{\s*(personalized|function)\s*\|\s*reference\s*:[^}]+\}\}/i;
+        const letRegex = /\{\{\s*let\b[^}]*\}\}/i;
+
+        lines.forEach((line, index) => {
+            const types = [];
+            if (sectionRegex.test(line)) types.push("section");
+            if (tesauroRegex.test(line)) types.push("tesauro");
+            if (letRegex.test(line)) types.push("let");
+            if (lineHasSelectedReference(line, selectedReferenceKey)) types.push("reference");
+
+            if (!types.length) return;
+
+            const topPercent = totalLines <= 1 ? 0 : (index / (totalLines - 1)) * 100;
+            types.forEach((type, offset) => {
+                const marker = document.createElement("div");
+                marker.className = "mini-map-marker mini-map-marker-" + type;
+                marker.style.top = topPercent + "%";
+                marker.style.left = 6 + offset * 6 + "px";
+                miniMapState.markers.appendChild(marker);
+            });
+        });
+    }
+}
+
+const miniMapToggle = document.getElementById("toggleMiniMap");
+if (miniMapToggle) {
+    miniMapToggle.addEventListener("click", () => {
+        miniMapState.enabled = !miniMapState.enabled;
+        ensureMiniMap();
+        miniMapState.container.classList.toggle("is-visible", miniMapState.enabled);
+        miniMapToggle.classList.toggle("is-active", miniMapState.enabled);
+        miniMapToggle.setAttribute("aria-pressed", miniMapState.enabled ? "true" : "false");
+        updateMiniMap();
+    });
+}
 // El contenedor (#workContainer) ya existe
 if (markdownText.parentElement) {
     const parent = markdownText.parentElement;
@@ -1961,6 +2141,9 @@ markdownText.addEventListener("input", () => {
     updateHighlight();
     updateLineNumbers();
 });
+markdownText.addEventListener("mouseup", updateSelectedReference);
+markdownText.addEventListener("keyup", updateSelectedReference);
+markdownText.addEventListener("select", updateSelectedReference);
 
 function updateHighlight() {
     const txt = markdownText.value;
@@ -1970,6 +2153,26 @@ function updateHighlight() {
     const scrollbarWidth = markdownText.offsetWidth - markdownText.clientWidth;
     const basePaddingRight = 12;
     hl.style.paddingRight = (basePaddingRight + Math.max(0, scrollbarWidth)) + "px";
+
+    const referenceMatches = (kind, ref) => {
+        if (!selectedReferenceKey || !kind || !ref) return false;
+        return selectedReferenceKey === buildReferenceKey(kind, ref);
+    };
+
+    const applyInlineReferenceHighlights = (html) => {
+        if (!selectedReferenceKey) return html;
+        if (selectedReferenceKey.startsWith("personalized.")) {
+            const ref = selectedReferenceKey.slice("personalized.".length);
+            const re = new RegExp("\\bpersonalized\\." + escapeRegex(ref) + "\\b", "gi");
+            html = html.replace(re, (match) => `<span class="reference-inline-hit">${match}</span>`);
+        }
+        if (selectedReferenceKey.startsWith("variable.")) {
+            const ref = selectedReferenceKey.slice("variable.".length);
+            const re = new RegExp("\\bvariable\\." + escapeRegex(ref) + "\\b", "gi");
+            html = html.replace(re, (match) => `<span class="reference-inline-hit">${match}</span>`);
+        }
+        return html;
+    };
 
     // Escapar HTML básico
     function escapeHtml(str) {
@@ -2180,15 +2383,23 @@ function updateHighlight() {
             safe = safe.replace(
                 /\{\{\s*personalized\s*\|\s*reference\s*:[^}]+\}\}/g,
                 function (matchTesauro) {
+                    const refMatch = matchTesauro.match(/reference\s*:\s*([^}|]+)\s*\}\}/i);
+                    const ref = refMatch ? refMatch[1].trim() : "";
+                    const hit = referenceMatches("personalized", ref);
                     const safeMatch = matchTesauro.replace(/&/g, "&amp;");
-                    return '<span class="tesauro-block">' + safeMatch + '</span>';
+                    const refAttr = ref ? ` data-reference="${escapeAttr(ref)}"` : "";
+                    return '<span class="tesauro-block' + (hit ? " reference-hit" : "") + '"' + refAttr + '>' + safeMatch + '</span>';
                 }
             );
             safe = safe.replace(
                 /\{\{\s*function\s*\|\s*reference\s*:[^}]+\}\}/gi,
                 function (matchFunction) {
+                    const refMatch = matchFunction.match(/reference\s*:\s*([^}|]+)\s*\}\}/i);
+                    const ref = refMatch ? refMatch[1].trim() : "";
+                    const hit = referenceMatches("function", ref);
                     const safeMatch = matchFunction.replace(/&/g, "&amp;");
-                    return '<span class="function-block">' + safeMatch + '</span>';
+                    const refAttr = ref ? ` data-reference="${escapeAttr(ref)}"` : "";
+                    return '<span class="function-block' + (hit ? " reference-hit" : "") + '"' + refAttr + '>' + safeMatch + '</span>';
                 }
             );
         }
@@ -2198,7 +2409,20 @@ function updateHighlight() {
             safe = safe.replace(
                 /\{\{\s*let\b[^}]*\}\}/gi,
                 function (matchLet) {
-                    return '<span class="let-block">' + matchLet + '</span>';
+                    const refMatch = matchLet.match(/reference\s*:\s*([^|}]+)/i);
+                    let hit = false;
+                    if (refMatch) {
+                        const rawRef = refMatch[1].trim();
+                        let kind = "personalized";
+                        let ref = rawRef;
+                        const dot = rawRef.indexOf(".");
+                        if (dot !== -1) {
+                            kind = rawRef.slice(0, dot).trim();
+                            ref = rawRef.slice(dot + 1).trim();
+                        }
+                        hit = referenceMatches(kind, ref);
+                    }
+                    return '<span class="let-block' + (hit ? " reference-hit" : "") + '">' + matchLet + '</span>';
                 }
             );
             safe = safe.replace(
@@ -2222,6 +2446,8 @@ function updateHighlight() {
                 }
             );
         }
+
+        safe = applyInlineReferenceHighlights(safe);
 
         const doSections = (typeof highlightSections === "undefined" || highlightSections);
 
@@ -2285,6 +2511,7 @@ function updateHighlight() {
     }
 
     updateLineNumbers();
+    updateMiniMap();
 }
 
 

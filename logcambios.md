@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.31 - 2026-02-28
+- Se añadió el resaltado de referencias seleccionadas (sections, tesauros y LET) para localizar todas sus iteraciones en el texto.
+- Se incorporó un toggle de miniatura con minimapa flotante que muestra líneas, bloques de toggle y las referencias resaltadas.
+
 ## v1.3.30 - 2026-02-27
 - Se añadió scroll vertical al modal de doble columna multipárrafo para manejar listas largas de párrafos sin perder la barra de acciones.
 
