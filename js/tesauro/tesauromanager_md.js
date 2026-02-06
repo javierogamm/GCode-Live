@@ -1819,7 +1819,15 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                 .map(c => [c.ref.toLowerCase(), c])
         );
 
-        const nuevos = state.combinedTesauros.map(item => {
+        const coincidentes = state.combinedTesauros
+            .filter(item => item.enMarkdown && item.fromPaste);
+
+        if (!coincidentes.length) {
+            alert("No hay tesauros coincidentes entre el Markdown y el copypaste.");
+            return;
+        }
+
+        const nuevos = coincidentes.map(item => {
             const ref = this.limitReferenceLength(item.ref);
             const key = ref.toLowerCase();
             const existing = actualMap.get(key) || {};
@@ -1843,7 +1851,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
         this.render();
         this.recordHistory();
 
-        alert("✔ Importados/actualizados " + nuevos.length + " tesauros desde Markdown.");
+        alert("✔ Importados/actualizados " + nuevos.length + " tesauros coincidentes desde Markdown.");
         if (this.markdownImportModal) this.markdownImportModal.style.display = "none";
         this.markdownImportState = null;
     },

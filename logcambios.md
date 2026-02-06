@@ -1,5 +1,8 @@
 # Log de cambios
 
+## v1.3.38 - 2026-03-02
+- El importador desde Markdown ahora solo crea tesauros que coinciden entre el Markdown y el copypaste.
+
 ## v1.3.37 - 2026-03-02
 - El flujo de importación desde Markdown ahora obliga a continuar con el copypaste de tesauros para cruzar coincidencias.
 - La captura de referencias y valores solo se solicita para los selectores que coinciden con el copypaste y el Markdown.
