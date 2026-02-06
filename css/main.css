@@ -815,6 +815,12 @@ body {
   border-radius: 4px;
   padding: 0;
 }
+.code-error-block {
+  background: rgba(230, 7, 7, 0.575); /* rojito suave */
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.85);
+  border-radius: 4px;
+  padding: 0;
+}
 
 .let-block {
   background: rgba(37, 99, 235, 0.30);    /* azul tipo cobalt */
@@ -844,6 +850,7 @@ body {
 .columns-right-block,
 .section-block,
 .section-error-block,
+.code-error-block,
 .let-block,
 .definition-block {
     overflow-wrap: break-word;
