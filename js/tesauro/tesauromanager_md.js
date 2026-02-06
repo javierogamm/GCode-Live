@@ -28,6 +28,7 @@ const TesauroManager = {
     csvImportModal: null,
     selectorConfigModal: null,
     pasteImportState: null,
+    markdownImportState: null,
 
     // modal exportar Tesauro (3 CSV)
     exportModal: null,
@@ -1196,14 +1197,13 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
 
     /* ============================================================
        *** NUEVO ***
-       POPUP IMPORTAR TESAUROS DESDE MARKDOWN
-       - Detecta {{personalized | reference: RefTesauro}}
-       - Muestra lista editable antes de guardar
+       POPUP IMPORTAR TESAUROS DESDE MARKDOWN (flujo guiado)
     ============================================================ */
     openMarkdownImportPopup() {
-        // si ya existe, solo mostrar
         if (this.markdownImportModal) {
             this.markdownImportModal.style.display = "flex";
+            this.resetMarkdownImportState();
+            this.renderMarkdownImportStep(1);
             return;
         }
 
@@ -1219,298 +1219,647 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
         div.innerHTML = `
             <div style="
                 background:white;
-                width:760px;
+                width:820px;
                 max-width:95%;
                 padding:20px;
                 border-radius:12px;
                 box-shadow:0 4px 20px rgba(0,0,0,0.35);
                 display:flex;
                 flex-direction:column;
-                max-height:80vh;
+                max-height:85vh;
+                gap:10px;
             ">
-                <h2 style="margin:0 0 10px 0; text-align:center;">📝 Importar tesauros desde Markdown</h2>
-                <p style="margin:0 0 8px 0; font-size:13px; color:#4b5563;">
-                    Se detectarán referencias con la forma
-                    <code>{{personalized | reference: MiReferencia}}</code>
-                    en el Markdown pegado abajo. Cada referencia generará (o actualizará)
-                    un tesauro con esa referencia.
+                <h2 style="margin:0; text-align:center;">📝 Importar tesauros desde Markdown</h2>
+                <p style="margin:0; font-size:13px; color:#4b5563; text-align:center;">
+                    Flujo guiado para detectar tesauros en Markdown y completar los datos requeridos.
                 </p>
-
-                <textarea id="tmMdInput" style="
-                    width:100%;
-                    min-height:120px;
-                    resize:vertical;
-                    padding:8px;
-                    margin:8px 0 10px 0;
-                    border:1px solid #cbd5e1;
-                    border-radius:6px;
-                    font-family:Consolas,monospace;
-                    font-size:12px;
-                " placeholder="Pega aquí el Markdown que contiene tesauros..."></textarea>
-
-                <!-- Contenedor con scroll para la lista editable -->
-                <div style="
-                    flex:1;
-                    min-height:120px;
-                    max-height:40vh;
-                    overflow:auto;
-                    border:1px solid #e5e7eb;
-                    border-radius:6px;
-                    padding:4px;
-                    margin-bottom:10px;
-                ">
-                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                        <thead>
-                            <tr style="background:#e5e7eb;">
-                                <th style="padding:4px; border:1px solid #d1d5db;">Referencia</th>
-                                <th style="padding:4px; border:1px solid #d1d5db;">Nombre</th>
-                                <th style="padding:4px; border:1px solid #d1d5db;">Tipo</th>
-                                <th style="padding:4px; border:1px solid #d1d5db;">Momento</th>
-                                <th style="padding:4px; border:1px solid #d1d5db;">Agrupación</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tmMdTable"></tbody>
-                    </table>
-                </div>
-
-                <div style="display:flex; gap:10px; margin-top:4px;">
-                    <button id="tmMdCancel" style="
-                        flex:1; background:#f1f5f9; border:1px solid #cbd5e1;
-                        padding:8px; border-radius:6px; cursor:pointer;
-                    ">Cancelar</button>
-
-                    <button id="tmMdDetect" style="
-                        flex:1; background:#fef3c7; border:1px solid #f59e0b;
-                        padding:8px; border-radius:6px; cursor:pointer; font-weight:bold;
-                    ">🔍 Detectar tesauros</button>
-
-                    <button id="tmMdImport" style="
-                        flex:1; background:#10b981; color:white;
-                        border:none; padding:8px; border-radius:6px;
-                        cursor:pointer; font-weight:bold;
-                    ">💾 Importar y guardar</button>
-                </div>
+                <div id="tmMdFlow" style="display:flex; flex-direction:column; gap:10px;"></div>
             </div>
         `;
 
         document.body.appendChild(div);
         this.markdownImportModal = div;
+        this.resetMarkdownImportState();
+        this.renderMarkdownImportStep(1);
+    },
 
-        const txtArea = div.querySelector("#tmMdInput");
-        const tbody = div.querySelector("#tmMdTable");
-        const btnCancel = div.querySelector("#tmMdCancel");
-        const btnDetect = div.querySelector("#tmMdDetect");
-        const btnImport = div.querySelector("#tmMdImport");
+    resetMarkdownImportState() {
+        this.markdownImportState = {
+            step: 1,
+            markdownText: "",
+            markdownRefs: [],
+            wantsPasteImport: null,
+            pasteTesauros: [],
+            combinedTesauros: [],
+            opcionesPorRef: {},
+            selectorsQueue: [],
+            existingMap: new Map()
+        };
+    },
 
-        if (btnCancel) {
-            btnCancel.addEventListener("click", () => {
-                this.markdownImportModal.style.display = "none";
-            });
+    detectTesaurosFromMarkdown(rawText) {
+        const refsSet = new Set();
+        const regex = /\{\{\s*personalized\s*\|\s*reference\s*:\s*([A-Za-z0-9_]+)\s*\}\}/gi;
+        let m;
+        while ((m = regex.exec(rawText || "")) !== null) {
+            const ref = (m[1] || "").trim();
+            if (ref) refsSet.add(ref);
         }
+        return Array.from(refsSet);
+    },
 
-        if (btnDetect) {
-            btnDetect.addEventListener("click", () => {
-                const raw = (txtArea.value || "");
-                const refsSet = new Set();
+    buildMarkdownImportCombinedList({ forceDefaults = false } = {}) {
+        const state = this.markdownImportState;
+        if (!state) return [];
+        const defaultTipo = "texto";
+        const defaultMomento = "Solicitud";
+        const defaultAgrupacion = "AGRUPACIÓN";
+        const markdownSet = new Set(state.markdownRefs.map(ref => ref.toLowerCase()));
+        const existentes = state.existingMap;
+        const mapa = new Map();
 
-                // Buscar {{personalized | reference: RefTesauro}}
-                const regex = /\{\{\s*personalized\s*\|\s*reference\s*:\s*([A-Za-z0-9_]+)\s*\}\}/gi;
-                let m;
-                while ((m = regex.exec(raw)) !== null) {
-                    const ref = (m[1] || "").trim();
-                    if (ref) refsSet.add(ref);
-                }
-
-                tbody.innerHTML = "";
-
-                const refs = Array.from(refsSet);
-                if (!refs.length) {
-                    alert("No se han encontrado tesauros en el Markdown.");
-                    return;
-                }
-
-                const existentes = (window.DataTesauro && Array.isArray(DataTesauro.campos))
-                    ? DataTesauro.campos
-                    : [];
-
-                refs.forEach(ref => {
-                    const refLimited = this.limitReferenceLength(ref);
-                    const existing = existentes.find(c =>
-                        (c.ref || "").toLowerCase() === refLimited.toLowerCase()
-                    ) || {};
-
-                    const tr = document.createElement("tr");
-                    tr.style.borderBottom = "1px solid #e5e7eb";
-
-                    // Referencia
-                    const tdRef = document.createElement("td");
-                    tdRef.style.padding = "4px";
-                    tdRef.style.border = "1px solid #d1d5db";
-                    const inpRef = document.createElement("input");
-                    inpRef.type = "text";
-                    inpRef.className = "tmMd-ref";
-                    inpRef.value = refLimited;
-                    inpRef.maxLength = 40;
-                    inpRef.style.width = "100%";
-                    inpRef.style.padding = "3px";
-                    inpRef.style.border = "1px solid #cbd5e1";
-                    inpRef.style.borderRadius = "4px";
-                    inpRef.addEventListener("input", () => {
-                        const limited = this.limitReferenceLength(inpRef.value);
-                        if (inpRef.value !== limited) {
-                            inpRef.value = limited;
-                        }
-                    });
-                    tdRef.appendChild(inpRef);
-
-                    // Nombre
-                    const tdNombre = document.createElement("td");
-                    tdNombre.style.padding = "4px";
-                    tdNombre.style.border = "1px solid #d1d5db";
-                    const inpNombre = document.createElement("input");
-                    inpNombre.type = "text";
-                    inpNombre.className = "tmMd-nombre";
-                    inpNombre.value = existing.nombre || ref;
-                    inpNombre.style.width = "100%";
-                    inpNombre.style.padding = "3px";
-                    inpNombre.style.border = "1px solid #cbd5e1";
-                    inpNombre.style.borderRadius = "4px";
-                    tdNombre.appendChild(inpNombre);
-
-                    // Tipo
-                    const tdTipo = document.createElement("td");
-                    tdTipo.style.padding = "4px";
-                    tdTipo.style.border = "1px solid #d1d5db";
-                    const selTipo = document.createElement("select");
-                    selTipo.className = "tmMd-tipo";
-                    selTipo.style.width = "100%";
-                    selTipo.style.padding = "3px";
-                    selTipo.style.borderRadius = "4px";
-                    selTipo.style.border = "1px solid #cbd5e1";
-
-                    const tipos = [
-                        ["selector", "Selector"],
-                        ["si_no", "Sí/No"],
-                        ["texto", "Texto"],
-                        ["numero", "Numérico"],
-                        ["moneda", "Moneda"],
-                        ["fecha", "Fecha"]
-                    ];
-                    const tipoActual = existing.tipo || "texto";
-                    tipos.forEach(([val, label]) => {
-                        const opt = document.createElement("option");
-                        opt.value = val;
-                        opt.textContent = label;
-                        if (val === tipoActual) opt.selected = true;
-                        selTipo.appendChild(opt);
-                    });
-                    tdTipo.appendChild(selTipo);
-
-                    // Momento
-                    const tdMomento = document.createElement("td");
-                    tdMomento.style.padding = "4px";
-                    tdMomento.style.border = "1px solid #d1d5db";
-                    const selMom = document.createElement("select");
-                    selMom.className = "tmMd-momento";
-                    selMom.style.width = "100%";
-                    selMom.style.padding = "3px";
-                    selMom.style.borderRadius = "4px";
-                    selMom.style.border = "1px solid #cbd5e1";
-
-                    const momentos = ["Solicitud", "Tramitación", "Ejecución", "Archivo"];
-                    const momentoActual = existing.momento || "Solicitud";
-                    momentos.forEach(mom => {
-                        const opt = document.createElement("option");
-                        opt.value = mom;
-                        opt.textContent = mom;
-                        if (mom === momentoActual) opt.selected = true;
-                        selMom.appendChild(opt);
-                    });
-                    tdMomento.appendChild(selMom);
-
-                    // Agrupación
-                    const tdAgr = document.createElement("td");
-                    tdAgr.style.padding = "4px";
-                    tdAgr.style.border = "1px solid #d1d5db";
-                    const inpAgr = document.createElement("input");
-                    inpAgr.type = "text";
-                    inpAgr.className = "tmMd-agr";
-                    inpAgr.value = existing.agrupacion || "Agrupación";
-                    inpAgr.style.width = "100%";
-                    inpAgr.style.padding = "3px";
-                    inpAgr.style.border = "1px solid #cbd5e1";
-                    inpAgr.style.borderRadius = "4px";
-                    tdAgr.appendChild(inpAgr);
-
-                    tr.appendChild(tdRef);
-                    tr.appendChild(tdNombre);
-                    tr.appendChild(tdTipo);
-                    tr.appendChild(tdMomento);
-                    tr.appendChild(tdAgr);
-
-                    tbody.appendChild(tr);
-                });
+        state.pasteTesauros.forEach(item => {
+            const ref = this.limitReferenceLength(item.ref || "");
+            if (!ref) return;
+            const key = ref.toLowerCase();
+            const existing = existentes.get(key) || {};
+            const nombre = (item.nombre || existing.nombre || ref).trim();
+            const tipo = item.tipo || existing.tipo || defaultTipo;
+            const momento = item.momento || existing.momento || defaultMomento;
+            const agrupacion = item.agrupacion || existing.agrupacion || defaultAgrupacion;
+            mapa.set(key, {
+                ref,
+                nombre,
+                tipo,
+                momento,
+                agrupacion,
+                enMarkdown: markdownSet.has(key)
             });
-        }
+        });
 
-        if (btnImport) {
-            btnImport.addEventListener("click", () => {
-                const rows = Array.from(tbody.querySelectorAll("tr"));
-                if (!rows.length) {
-                    alert("No hay nada que importar. Primero detecta los tesauros.");
-                    return;
-                }
+        state.markdownRefs.forEach(refRaw => {
+            const ref = this.limitReferenceLength(refRaw);
+            if (!ref) return;
+            const key = ref.toLowerCase();
+            if (mapa.has(key)) {
+                mapa.get(key).enMarkdown = true;
+                return;
+            }
+            const existing = existentes.get(key) || {};
+            const nombre = (existing.nombre || ref).trim();
+            const tipo = forceDefaults ? defaultTipo : (existing.tipo || defaultTipo);
+            const momento = forceDefaults ? defaultMomento : (existing.momento || defaultMomento);
+            const agrupacion = forceDefaults ? defaultAgrupacion : (existing.agrupacion || defaultAgrupacion);
+            mapa.set(key, {
+                ref,
+                nombre,
+                tipo,
+                momento,
+                agrupacion,
+                enMarkdown: markdownSet.has(key)
+            });
+        });
 
-                const actuales = (window.DataTesauro && Array.isArray(DataTesauro.campos))
-                    ? DataTesauro.campos
-                    : [];
-                const nuevos = [];
+        return Array.from(mapa.values());
+    },
 
-                rows.forEach(row => {
-                    const ref = (row.querySelector(".tmMd-ref")?.value || "").trim();
-                    const nombre = (row.querySelector(".tmMd-nombre")?.value || "").trim() || ref;
-                    const tipo = (row.querySelector(".tmMd-tipo")?.value || "texto");
-                    const momento = (row.querySelector(".tmMd-momento")?.value || "Solicitud");
-                    const agrupacion = (row.querySelector(".tmMd-agr")?.value || "Agrupación");
+    renderMarkdownImportStep(step) {
+        const state = this.markdownImportState;
+        if (!this.markdownImportModal || !state) return;
+        state.step = step;
+        const container = this.markdownImportModal.querySelector("#tmMdFlow");
+        if (!container) return;
 
-                    const refFinal = this.limitReferenceLength(ref);
-                    if (!refFinal || !nombre) return;
+        const renderDetectedTable = () => {
+            if (!state.markdownRefs.length) {
+                return "";
+            }
+            const rows = state.markdownRefs.map(refRaw => {
+                const ref = this.limitReferenceLength(refRaw);
+                const existing = state.existingMap.get(ref.toLowerCase());
+                const status = existing ? "✅ Existente" : "🆕 Nuevo";
+                const nombre = existing?.nombre || "-";
+                return `
+                    <tr>
+                        <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(ref)}</td>
+                        <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(nombre)}</td>
+                        <td style="padding:6px; border:1px solid #e2e8f0;">${status}</td>
+                    </tr>
+                `;
+            }).join("");
+            return `
+                <div style="max-height:220px; overflow:auto; border:1px solid #e2e8f0; border-radius:8px;">
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead>
+                            <tr style="background:#f1f5f9;">
+                                <th style="padding:6px; border:1px solid #e2e8f0;">Referencia</th>
+                                <th style="padding:6px; border:1px solid #e2e8f0;">Nombre existente</th>
+                                <th style="padding:6px; border:1px solid #e2e8f0;">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        };
 
-                    const existing = actuales.find(c =>
-                        (c.ref || "").toLowerCase() === refFinal.toLowerCase()
-                    );
+        const renderCombinedTable = (list, { highlight = false, sortByMarkdown = false } = {}) => {
+            if (!list.length) return "<p style='margin:0; color:#64748b;'>No hay tesauros para mostrar.</p>";
+            const rows = [...list];
+            if (sortByMarkdown) {
+                rows.sort((a, b) => Number(!!b.enMarkdown) - Number(!!a.enMarkdown));
+            }
+            return `
+                <div style="max-height:280px; overflow:auto; border:1px solid #e2e8f0; border-radius:8px;">
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead>
+                            <tr style="background:#f8fafc;">
+                                <th style="padding:6px; border:1px solid #e2e8f0;">Referencia</th>
+                                <th style="padding:6px; border:1px solid #e2e8f0;">Nombre</th>
+                                <th style="padding:6px; border:1px solid #e2e8f0;">Tipo</th>
+                                <th style="padding:6px; border:1px solid #e2e8f0;">Momento</th>
+                                <th style="padding:6px; border:1px solid #e2e8f0;">Agrupación</th>
+                                <th style="padding:6px; border:1px solid #e2e8f0;">En Markdown</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map(item => `
+                                <tr style="background:${highlight ? (item.enMarkdown ? "#dcfce7" : "#f1f5f9") : "transparent"};">
+                                    <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.ref)}</td>
+                                    <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.nombre)}</td>
+                                    <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.tipo)}</td>
+                                    <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.momento)}</td>
+                                    <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.agrupacion)}</td>
+                                    <td style="padding:6px; border:1px solid #e2e8f0;">${item.enMarkdown ? "Sí" : "No"}</td>
+                                </tr>
+                            `).join("")}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        };
 
-                    const nuevo = {
-                        ref: refFinal,
-                        nombre,
-                        tipo,
-                        momento,
-                        agrupacion
-                    };
+        if (step === 1) {
+            container.innerHTML = `
+                <h3 style="margin:0;">1. Pegar Markdown</h3>
+                <p style="margin:0; font-size:13px; color:#4b5563;">
+                    Pega el Markdown para detectar tesauros con la forma
+                    <code>{{personalized | reference: MiReferencia}}</code>.
+                </p>
+                <textarea id="tmMdMarkdownInput" style="
+                    width:100%;
+                    min-height:140px;
+                    resize:vertical;
+                    padding:8px;
+                    border:1px solid #cbd5e1;
+                    border-radius:8px;
+                    font-family:Consolas,monospace;
+                    font-size:12px;
+                " placeholder="Pega aquí el Markdown...">${this.escapeAttr(state.markdownText)}</textarea>
+                <button id="tmMdDetectBtn" style="
+                    align-self:flex-start;
+                    background:#fef3c7;
+                    border:1px solid #f59e0b;
+                    padding:8px 12px;
+                    border-radius:8px;
+                    cursor:pointer;
+                    font-weight:bold;
+                ">🔍 Detectar tesauros</button>
+                ${renderDetectedTable()}
+                <div style="border-top:1px solid #e2e8f0; padding-top:10px;">
+                    <p style="margin:0; font-size:13px; color:#0f172a;">
+                        ¿Quieres importar los tesauros desde el copypaste de Gestiona?
+                    </p>
+                    <div style="display:flex; gap:10px; margin-top:8px;">
+                        <button id="tmMdStartPaste" style="
+                            flex:1; background:#10b981; color:white;
+                            border:none; padding:8px; border-radius:8px;
+                            cursor:pointer; font-weight:bold;
+                        " ${state.markdownRefs.length ? "" : "disabled"}>Sí, usar copypaste</button>
+                        <button id="tmMdSkipPaste" style="
+                            flex:1; background:#e2e8f0; border:1px solid #cbd5e1;
+                            padding:8px; border-radius:8px;
+                            cursor:pointer; font-weight:bold;
+                        " ${state.markdownRefs.length ? "" : "disabled"}>No, continuar sin copypaste</button>
+                    </div>
+                </div>
+            `;
 
-                    // Si ya existía y era selector, intenta preservar sus opciones
-                    if (existing && Array.isArray(existing.opciones)) {
-                        nuevo.opciones = existing.opciones.slice();
-                    } else if (tipo === "selector") {
-                        nuevo.opciones = [];
+            const detectBtn = container.querySelector("#tmMdDetectBtn");
+            if (detectBtn) {
+                detectBtn.addEventListener("click", () => {
+                    const input = container.querySelector("#tmMdMarkdownInput");
+                    const raw = (input?.value || "").trim();
+                    const refs = this.detectTesaurosFromMarkdown(raw);
+                    if (!refs.length) {
+                        alert("No se han encontrado tesauros en el Markdown.");
+                        return;
                     }
-
-                    nuevos.push(nuevo);
+                    state.markdownText = raw;
+                    state.markdownRefs = refs;
+                    const existentes = (window.DataTesauro && Array.isArray(DataTesauro.campos))
+                        ? DataTesauro.campos
+                        : [];
+                    state.existingMap = new Map(
+                        existentes
+                            .filter(c => c.ref)
+                            .map(c => [c.ref.toLowerCase(), c])
+                    );
+                    this.renderMarkdownImportStep(1);
                 });
+            }
 
-                if (!nuevos.length) {
-                    alert("No se ha generado ningún tesauro a partir de la tabla.");
-                    return;
-                }
+            const btnStartPaste = container.querySelector("#tmMdStartPaste");
+            if (btnStartPaste) {
+                btnStartPaste.addEventListener("click", () => {
+                    state.wantsPasteImport = true;
+                    this.renderMarkdownImportStep(2);
+                });
+            }
 
-                this.mergeImportedCampos(nuevos);
-                this.render();
-                this.recordHistory();
+            const btnSkipPaste = container.querySelector("#tmMdSkipPaste");
+            if (btnSkipPaste) {
+                btnSkipPaste.addEventListener("click", () => {
+                    state.wantsPasteImport = false;
+                    state.combinedTesauros = this.buildMarkdownImportCombinedList({ forceDefaults: true });
+                    this.renderMarkdownImportStep(5);
+                });
+            }
+            return;
+        }
 
-                alert("✔ Importados/actualizados " + nuevos.length + " tesauros desde Markdown.");
+        if (step === 2) {
+            container.innerHTML = `
+                <h3 style="margin:0;">2. Pegar listado de tesauros (copypaste)</h3>
+                <p style="margin:0; font-size:13px; color:#4b5563;">
+                    Pega el listado de tesauros con el mismo formato de copypaste actual.
+                </p>
+                <textarea id="tmMdPasteInput" style="
+                    width:100%;
+                    min-height:140px;
+                    resize:vertical;
+                    padding:8px;
+                    border:1px solid #cbd5e1;
+                    border-radius:8px;
+                    font-family:Consolas,monospace;
+                    font-size:12px;
+                " placeholder="Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
+                <div style="display:flex; gap:10px;">
+                    <button id="tmMdCancel" style="
+                        flex:1; background:#f1f5f9; border:1px solid #cbd5e1;
+                        padding:8px; border-radius:8px; cursor:pointer;
+                    ">Cancelar</button>
+                    <button id="tmMdLoadPaste" style="
+                        flex:1; background:#10b981; color:white;
+                        border:none; padding:8px; border-radius:8px;
+                        cursor:pointer; font-weight:bold;
+                    ">Cargar tesauros</button>
+                </div>
+            `;
+
+            container.querySelector("#tmMdCancel").addEventListener("click", () => {
                 this.markdownImportModal.style.display = "none";
             });
+
+            container.querySelector("#tmMdLoadPaste").addEventListener("click", () => {
+                const raw = container.querySelector("#tmMdPasteInput")?.value || "";
+                const parsed = this.parsePasteTesauros(raw);
+                if (!parsed.length) {
+                    alert("❌ No se detectaron filas válidas. Revisa el copypaste.");
+                    return;
+                }
+                state.pasteTesauros = parsed;
+                state.combinedTesauros = this.buildMarkdownImportCombinedList({ forceDefaults: false });
+                this.renderMarkdownImportStep(3);
+            });
+            return;
         }
+
+        if (step === 3) {
+            container.innerHTML = `
+                <h3 style="margin:0;">3. Revisar tesauros detectados</h3>
+                <p style="margin:0; font-size:13px; color:#4b5563;">
+                    Se muestra la lista completa de tesauros y se indica cuáles aparecen en el Markdown.
+                </p>
+                ${renderCombinedTable(state.combinedTesauros, { highlight: true, sortByMarkdown: true })}
+                <div style="display:flex; gap:10px;">
+                    <button id="tmMdCancel" style="
+                        flex:1; background:#f1f5f9; border:1px solid #cbd5e1;
+                        padding:8px; border-radius:8px; cursor:pointer;
+                    ">Cancelar</button>
+                    <button id="tmMdContinueSelectors" style="
+                        flex:1; background:#f59e0b; color:white;
+                        border:none; padding:8px; border-radius:8px;
+                        cursor:pointer; font-weight:bold;
+                    ">Continuar</button>
+                </div>
+            `;
+
+            container.querySelector("#tmMdCancel").addEventListener("click", () => {
+                this.markdownImportModal.style.display = "none";
+            });
+
+            container.querySelector("#tmMdContinueSelectors").addEventListener("click", () => {
+                state.selectorsQueue = state.combinedTesauros
+                    .filter(item => item.tipo === "selector" && item.enMarkdown)
+                    .map(item => ({
+                        ref: item.ref,
+                        nombre: item.nombre
+                    }));
+                if (state.selectorsQueue.length) {
+                    this.renderMarkdownImportStep(4);
+                    this.openMarkdownSelectorConfigModal();
+                } else {
+                    this.renderMarkdownImportStep(5);
+                }
+            });
+            return;
+        }
+
+        if (step === 4) {
+            const selectors = state.combinedTesauros
+                .filter(item => item.tipo === "selector" && item.enMarkdown);
+            const selectorList = selectors.length
+                ? `
+                    <div style="max-height:200px; overflow:auto; border:1px solid #e2e8f0; border-radius:8px;">
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <thead>
+                                <tr style="background:#f8fafc;">
+                                    <th style="padding:6px; border:1px solid #e2e8f0;">Referencia</th>
+                                    <th style="padding:6px; border:1px solid #e2e8f0;">Nombre</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${selectors.map(item => `
+                                    <tr>
+                                        <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.ref)}</td>
+                                        <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.nombre)}</td>
+                                    </tr>
+                                `).join("")}
+                            </tbody>
+                        </table>
+                    </div>
+                `
+                : "<p style='margin:0; color:#64748b;'>No hay selectores en el Markdown.</p>";
+
+            container.innerHTML = `
+                <h3 style="margin:0;">4. Completar valores de selectores</h3>
+                <p style="margin:0; font-size:13px; color:#4b5563;">
+                    Se pedirá el copypaste de referencias y valores para cada selector detectado en el Markdown.
+                </p>
+                ${selectorList}
+                <div style="display:flex; gap:10px;">
+                    <button id="tmMdCancel" style="
+                        flex:1; background:#f1f5f9; border:1px solid #cbd5e1;
+                        padding:8px; border-radius:8px; cursor:pointer;
+                    ">Cancelar</button>
+                    <button id="tmMdStartSelectorFlow" style="
+                        flex:1; background:#10b981; color:white;
+                        border:none; padding:8px; border-radius:8px;
+                        cursor:pointer; font-weight:bold;
+                    ">Iniciar captura de selectores</button>
+                </div>
+            `;
+
+            container.querySelector("#tmMdCancel").addEventListener("click", () => {
+                this.markdownImportModal.style.display = "none";
+            });
+
+            const btnStart = container.querySelector("#tmMdStartSelectorFlow");
+            if (btnStart) {
+                btnStart.addEventListener("click", () => {
+                    if (state.selectorsQueue.length) {
+                        this.openMarkdownSelectorConfigModal();
+                    } else {
+                        this.renderMarkdownImportStep(5);
+                    }
+                });
+            }
+            return;
+        }
+
+        if (step === 5) {
+            container.innerHTML = `
+                <h3 style="margin:0;">5. Confirmar importación</h3>
+                <p style="margin:0; font-size:13px; color:#4b5563;">
+                    Revisa los tesauros resultantes y confirma la importación.
+                </p>
+                ${renderCombinedTable(state.combinedTesauros)}
+                <div style="display:flex; gap:10px;">
+                    <button id="tmMdCancel" style="
+                        flex:1; background:#f1f5f9; border:1px solid #cbd5e1;
+                        padding:8px; border-radius:8px; cursor:pointer;
+                    ">Cancelar</button>
+                    <button id="tmMdConfirmImport" style="
+                        flex:1; background:#10b981; color:white;
+                        border:none; padding:8px; border-radius:8px;
+                        cursor:pointer; font-weight:bold;
+                    ">Confirmar importación</button>
+                </div>
+            `;
+
+            container.querySelector("#tmMdCancel").addEventListener("click", () => {
+                this.markdownImportModal.style.display = "none";
+            });
+
+            container.querySelector("#tmMdConfirmImport").addEventListener("click", () => {
+                this.applyMarkdownImport();
+            });
+        }
+    },
+
+    openMarkdownSelectorConfigModal() {
+        const state = this.markdownImportState;
+        if (!state?.selectorsQueue?.length) {
+            this.renderMarkdownImportStep(5);
+            return;
+        }
+
+        const selector = state.selectorsQueue.shift();
+
+        if (this.selectorConfigModal) {
+            this.selectorConfigModal.remove();
+        }
+
+        const modal = document.createElement("div");
+        modal.id = "tesauroSelectorModal";
+        modal.style.position = "fixed";
+        modal.style.inset = "0";
+        modal.style.background = "rgba(0,0,0,0.5)";
+        modal.style.display = "flex";
+        modal.style.alignItems = "center";
+        modal.style.justifyContent = "center";
+        modal.style.zIndex = "1000000";
+
+        modal.innerHTML = `
+            <div style="
+                background:white;
+                width:620px;
+                max-width:95%;
+                padding:20px;
+                border-radius:12px;
+                box-shadow:0 6px 20px rgba(0,0,0,0.35);
+                display:flex;
+                flex-direction:column;
+                gap:12px;
+            ">
+                <h2 style="margin:0; text-align:center;">
+                    🧩 Opciones para ${this.escapeAttr(selector.nombre || selector.ref)}
+                </h2>
+
+                <p style="margin:0; color:#475569; font-size:14px;">
+                    Pega la tabla de referencias para este selector. Se detectan referencias y valores,
+                    ignorando las etiquetas de idioma.
+                </p>
+
+                <textarea id="selectorPasteInput" style="
+                    width:100%;
+                    min-height:140px;
+                    resize:vertical;
+                    padding:10px;
+                    border:1px solid #cbd5e1;
+                    border-radius:8px;
+                    font-family:inherit;
+                "></textarea>
+
+                <button id="selectorParse" style="
+                    padding:10px; border-radius:8px; cursor:pointer; font-weight:bold;
+                ">Cargar referencias</button>
+
+                <div id="selectorValuesContainer" style="max-height:260px; overflow:auto;"></div>
+
+                <div style="display:flex; gap:10px;">
+                    <button id="selectorCancel" style="
+                        flex:1; padding:10px; border-radius:8px; cursor:pointer; font-weight:bold;
+                    ">Cancelar</button>
+                    <button id="selectorConfirm" style="
+                        flex:1; padding:10px; border-radius:8px; cursor:pointer; font-weight:bold;
+                    ">Guardar y continuar</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        this.selectorConfigModal = modal;
+
+        const container = modal.querySelector("#selectorValuesContainer");
+        const parseBtn = modal.querySelector("#selectorParse");
+
+        const renderRefs = (refs) => {
+            if (!refs.length) {
+                container.innerHTML = "<p style='color:#64748b;'>Sin referencias detectadas.</p>";
+                return;
+            }
+
+            container.innerHTML = `
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#e2e8f0;">
+                            <th style="padding:6px; border:1px solid #cbd5e1;">Referencia</th>
+                            <th style="padding:6px; border:1px solid #cbd5e1;">Valor literal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${refs.map(({ ref, valor }) => `
+                            <tr>
+                                <td style="padding:6px; border:1px solid #cbd5e1;">${this.escapeAttr(ref)}</td>
+                                <td style="padding:6px; border:1px solid #cbd5e1;">
+                                    <input data-ref="${this.escapeAttr(ref)}" class="selector-valor-input"
+                                        value="${this.escapeAttr(valor || "")}"
+                                        style="width:100%; padding:6px; border:1px solid #cbd5e1; border-radius:6px;" />
+                                </td>
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+            `;
+        };
+
+        parseBtn.addEventListener("click", () => {
+            const text = modal.querySelector("#selectorPasteInput")?.value || "";
+            const refs = this.parseSelectorRefs(text);
+            renderRefs(refs);
+        });
+
+        modal.querySelector("#selectorCancel").addEventListener("click", () => {
+            modal.remove();
+            this.selectorConfigModal = null;
+            this.renderMarkdownImportStep(4);
+        });
+
+        modal.querySelector("#selectorConfirm").addEventListener("click", () => {
+            const inputs = Array.from(modal.querySelectorAll(".selector-valor-input"));
+            if (!inputs.length) {
+                alert("❌ Debes cargar referencias antes de continuar.");
+                return;
+            }
+
+            const opciones = [];
+            let missing = false;
+
+            inputs.forEach(input => {
+                const ref = input.dataset.ref;
+                const valor = (input.value || "").trim();
+                if (!valor) missing = true;
+                opciones.push({ id: this.generateId(), ref, valor });
+            });
+
+            if (missing) {
+                alert("❌ Completa el valor literal de todas las referencias.");
+                return;
+            }
+
+            state.opcionesPorRef[selector.ref] = opciones;
+
+            modal.remove();
+            this.selectorConfigModal = null;
+            this.openMarkdownSelectorConfigModal();
+        });
+    },
+
+    applyMarkdownImport() {
+        const state = this.markdownImportState;
+        if (!state?.combinedTesauros?.length) {
+            alert("No hay tesauros para importar.");
+            return;
+        }
+
+        const actuales = (window.DataTesauro && Array.isArray(DataTesauro.campos))
+            ? DataTesauro.campos
+            : [];
+        const actualMap = new Map(
+            actuales
+                .filter(c => c.ref)
+                .map(c => [c.ref.toLowerCase(), c])
+        );
+
+        const nuevos = state.combinedTesauros.map(item => {
+            const ref = this.limitReferenceLength(item.ref);
+            const key = ref.toLowerCase();
+            const existing = actualMap.get(key) || {};
+            const nuevo = {
+                ref,
+                nombre: (item.nombre || ref).trim(),
+                tipo: item.tipo || "texto",
+                momento: item.momento || "Solicitud",
+                agrupacion: item.agrupacion || "AGRUPACIÓN"
+            };
+
+            if (nuevo.tipo === "selector") {
+                const opciones = state.opcionesPorRef[ref] || existing.opciones;
+                nuevo.opciones = Array.isArray(opciones) ? opciones : [];
+            }
+
+            return nuevo;
+        });
+
+        this.mergeImportedCampos(nuevos);
+        this.render();
+        this.recordHistory();
+
+        alert("✔ Importados/actualizados " + nuevos.length + " tesauros desde Markdown.");
+        if (this.markdownImportModal) this.markdownImportModal.style.display = "none";
+        this.markdownImportState = null;
     },
 
     /* ============================================================

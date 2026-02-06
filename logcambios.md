@@ -1,5 +1,15 @@
 # Log de cambios
 
+## v1.3.36 - 2026-03-01
+- Se añadió el paso 4 en la importación desde Markdown para capturar uno a uno los valores de selectores detectados.
+
+## v1.3.35 - 2026-03-01
+- En la revisión de importación desde Markdown se ordenan primero los tesauros coincidentes y se resaltan en verde, dejando los no coincidentes en gris.
+- El paso de selección de valores ahora solo solicita selectores que aparecen en el Markdown.
+
+## v1.3.34 - 2026-03-01
+- Se rediseñó el flujo de importación de tesauros desde Markdown con detección inicial, confirmación de copypaste, revisión en tabla y configuración guiada de selectores antes de confirmar.
+
 ## v1.3.33 - 2026-02-28
 - Se recuperó el resaltado de referencias coincidentes dentro de la miniatura y se hizo más visible en su escala.
 - La miniatura ahora muestra la ventana visible del editor y aumentó su tamaño en un 50%.
