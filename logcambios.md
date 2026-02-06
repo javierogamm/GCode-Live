@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.41 - 2026-02-06
+- El minimapa se activa por defecto y sincroniza su estado con el botón de miniatura.
+- El resaltado de errores ahora marca en rojo tesauros, LET y definitions mal configurados, además de detectar etiquetas de sección mal escritas.
+- La validación de sections ignora espacios y marca errores por palabras fijas mal escritas, paréntesis o comillas faltantes, con excepción de valores `null` sin comillas.
+
 ## v1.3.40 - 2026-02-06
 - El resaltado de referencias seleccionadas ahora se aplica también a bloques de tesauros, LET y definitions para que se vean en el canvas principal.
 - Las iteraciones de referencias tipo tesauro ahora resaltan también en representaciones inline y en bloques definition.

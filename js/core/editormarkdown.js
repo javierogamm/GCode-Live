@@ -1843,7 +1843,7 @@ let highlightLet       = true;
 let highlightColumns   = true;
 let selectedReferenceKey = null;
 const miniMapState = {
-    enabled: false,
+    enabled: true,
     container: null,
     base: null,
     content: null,
@@ -2116,14 +2116,20 @@ function updateMiniMap() {
 
 const miniMapToggle = document.getElementById("toggleMiniMap");
 if (miniMapToggle) {
-    miniMapToggle.addEventListener("click", () => {
-        miniMapState.enabled = !miniMapState.enabled;
+    const syncMiniMapState = () => {
         ensureMiniMap();
-        miniMapState.container.classList.toggle("is-visible", miniMapState.enabled);
+        if (miniMapState.container) {
+            miniMapState.container.classList.toggle("is-visible", miniMapState.enabled);
+        }
         miniMapToggle.classList.toggle("is-active", miniMapState.enabled);
         miniMapToggle.setAttribute("aria-pressed", miniMapState.enabled ? "true" : "false");
         updateMiniMap();
+    };
+    miniMapToggle.addEventListener("click", () => {
+        miniMapState.enabled = !miniMapState.enabled;
+        syncMiniMapState();
     });
+    syncMiniMapState();
 }
 // El contenedor (#workContainer) ya existe
 if (markdownText.parentElement) {
@@ -2293,6 +2299,28 @@ function updateHighlight() {
             .replace(/>/g, "&gt;");
     }
 
+    const normalizeCodeSpacing = (value) => String(value).replace(/\s+/g, "");
+
+    const hasUnbalancedQuotes = (value) => {
+        let count = 0;
+        let escaped = false;
+        for (let i = 0; i < value.length; i++) {
+            const ch = value[i];
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === "\\") {
+                escaped = true;
+                continue;
+            }
+            if (ch === "\"") {
+                count += 1;
+            }
+        }
+        return count % 2 !== 0;
+    };
+
     // Comprobación de paréntesis balanceados dentro de condition:
     function areParenthesesBalanced(s) {
         let count = 0;
@@ -2307,11 +2335,57 @@ function updateHighlight() {
         return count === 0;
     }
 
+    const hasInvalidConditionReferences = (expr) => {
+        const refRegex = /\b([A-Za-z_]+)\.[A-Za-z0-9_]+\b/g;
+        let match;
+        while ((match = refRegex.exec(expr)) !== null) {
+            const prefix = match[1].toLowerCase();
+            if (prefix !== "personalized" && prefix !== "variable") {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const hasInvalidConditionValues = (expr) => {
+        const comparisonRegex =
+            /\b(?:personalized|variable)\.[A-Za-z0-9_]+\s*(==|!=|>=|<=|>|<)\s*([^\s()]+|"[^"]*")/gi;
+        let match;
+        while ((match = comparisonRegex.exec(expr)) !== null) {
+            const rawValue = match[2];
+            if (rawValue.startsWith("\"")) {
+                if (!rawValue.endsWith("\"")) return true;
+                continue;
+            }
+            const value = rawValue.toLowerCase();
+            if (value === "null") continue;
+            if (value === "true" || value === "false") continue;
+            if (/^-?\d+(\.\d+)?$/.test(rawValue)) continue;
+            return true;
+        }
+        return false;
+    };
+
+    const isValidSectionOpenTag = (full) => {
+        const match = full.match(
+            /^\{\{\s*#\s*section_([^}\s|]+)\s*\|\s*condition\s*:\s*([\s\S]*)\}\}$/i
+        );
+        if (!match) return false;
+        const expr = match[2].trim();
+        if (!expr) return false;
+        if (!/[()]/.test(expr)) return false;
+        if (!areParenthesesBalanced(expr)) return false;
+        if (hasUnbalancedQuotes(expr)) return false;
+        if (hasInvalidConditionReferences(expr)) return false;
+        if (hasInvalidConditionValues(expr)) return false;
+        return true;
+    };
+
     // 1) TOKENIZAR texto en:
     //    - trozos normales
     //    - tags de sección {{#section_NAME ...}} / {{/section_NAME}}
     const tokens = [];
-    const tagRegex = /\{\{(#|\/)section_([^}\s|]+)[^}]*\}\}/g;
+    const tagRegex = /\{\{\s*(#|\/)\s*section_([^}\s|]+)[^}]*\}\}/g;
     let lastIndex = 0;
     let m;
 
@@ -2331,7 +2405,7 @@ function updateHighlight() {
 
         if (kind === "#") {
             // APERTURA VÁLIDA SOLO SI:  {{#section_NOMBRE | condition:...}}
-            let syntaxOk = /^\{\{#section_[^}\s|]+\s*\|\s*condition\s*:/i.test(full);
+            let syntaxOk = isValidSectionOpenTag(full);
 
             // Validar paréntesis en la expresión de condition:
             if (syntaxOk) {
@@ -2357,7 +2431,7 @@ function updateHighlight() {
             });
         } else {
             // CIERRE VÁLIDO SOLO SI: {{/section_NOMBRE}}
-            const syntaxOkClose = /^\{\{\/section_[^}\s|]+\s*\}\}$/i.test(full);
+            const syntaxOkClose = /^\{\{\s*\/\s*section_[^}\s|]+\s*\}\}$/i.test(full);
             tokens.push({
                 type: "close",
                 name: name,
@@ -2489,60 +2563,118 @@ function updateHighlight() {
         // Escapamos HTML
         let safe = escapeHtml(seg.text);
 
-        // TESAUROS (toggle)
-        if (typeof highlightTesauros === "undefined" || highlightTesauros) {
-            safe = safe.replace(
-                /\{\{\s*personalized\s*\|\s*reference\s*:[^}]+\}\}/g,
-                function (matchTesauro) {
-                    const refMatch = matchTesauro.match(/reference\s*:\s*([^}|]+)\s*\}\}/i);
-                    const ref = refMatch ? refMatch[1].trim() : "";
-                    const hit = referenceMatches("personalized", ref);
-                    const safeMatch = matchTesauro.replace(/&/g, "&amp;");
-                    const refAttr = ref ? ` data-reference="${escapeAttr(ref)}"` : "";
-                    return '<span class="tesauro-block' + (hit ? " reference-hit" : "") + '"' + refAttr + '>' + safeMatch + '</span>';
-                }
-            );
-            safe = safe.replace(
-                /\{\{\s*function\s*\|\s*reference\s*:[^}]+\}\}/gi,
-                function (matchFunction) {
-                    const refMatch = matchFunction.match(/reference\s*:\s*([^}|]+)\s*\}\}/i);
-                    const ref = refMatch ? refMatch[1].trim() : "";
-                    const hit = referenceMatches("function", ref);
-                    const safeMatch = matchFunction.replace(/&/g, "&amp;");
-                    const refAttr = ref ? ` data-reference="${escapeAttr(ref)}"` : "";
-                    return '<span class="function-block' + (hit ? " reference-hit" : "") + '"' + refAttr + '>' + safeMatch + '</span>';
-                }
-            );
-        }
+        const wrapCodeError = (value) => '<span class="code-error-block">' + value + '</span>';
+        const parseReferenceValue = (value) => {
+            const refMatch = value.match(/reference\s*:\s*([^|}]+)\s*(?:\||\}\})/i);
+            return refMatch ? refMatch[1].trim() : "";
+        };
+        const isValidTesauroBlock = (value) => {
+            const normalized = normalizeCodeSpacing(value).toLowerCase();
+            if (!normalized.endsWith("}}")) return false;
+            if (!(normalized.startsWith("{{personalized|") || normalized.startsWith("{{function|"))) {
+                return false;
+            }
+            return normalized.includes("|reference:");
+        };
+        const isValidLetBlock = (value) => {
+            const normalized = normalizeCodeSpacing(value).toLowerCase();
+            if (!normalized.endsWith("}}")) return false;
+            if (!normalized.startsWith("{{let|")) return false;
+            if (!normalized.includes("|reference:")) return false;
+            return normalized.includes("|result:");
+        };
+        const isValidDefinitionBlock = (value) => {
+            const normalized = normalizeCodeSpacing(value).toLowerCase();
+            if (!normalized.endsWith("}}")) return false;
+            if (!normalized.startsWith("{{definition|")) return false;
+            if (!normalized.includes("|reference:")) return false;
+            if (!normalized.includes("|type:")) return false;
+            return normalized.includes("|value:");
+        };
 
-        // LET / DEFINITION (toggle compartido)
-        if (typeof highlightLet === "undefined" || highlightLet) {
-            safe = safe.replace(
-                /\{\{\s*let\b[^}]*\}\}/gi,
-                function (matchLet) {
-                    const refMatch = matchLet.match(/reference\s*:\s*([^|}]+)/i);
-                    let hit = false;
-                    if (refMatch) {
-                        const rawRef = refMatch[1].trim();
-                        let kind = "personalized";
-                        let ref = rawRef;
-                        const dot = rawRef.indexOf(".");
-                        if (dot !== -1) {
-                            kind = rawRef.slice(0, dot).trim();
-                            ref = rawRef.slice(dot + 1).trim();
-                        }
-                        hit = referenceMatches(kind, ref);
+        const allowTesauros = typeof highlightTesauros === "undefined" || highlightTesauros;
+        const allowLet = typeof highlightLet === "undefined" || highlightLet;
+
+        safe = safe.replace(/\{\{[\s\S]*?\}\}/g, function (matchBlock) {
+            if (/^\{\{\s*[#/]/.test(matchBlock)) {
+                return matchBlock;
+            }
+            const normalized = normalizeCodeSpacing(matchBlock).toLowerCase();
+            const wantsTesauro =
+                normalized.startsWith("{{personalized") || normalized.startsWith("{{function");
+            const wantsLet = normalized.startsWith("{{let");
+            const wantsDefinition = normalized.startsWith("{{definition");
+
+            if (wantsTesauro) {
+                if (!allowTesauros) return matchBlock;
+                if (!isValidTesauroBlock(matchBlock)) return wrapCodeError(matchBlock);
+                const isFunction = normalized.startsWith("{{function");
+                const ref = parseReferenceValue(matchBlock);
+                const hit = ref ? referenceMatches(isFunction ? "function" : "personalized", ref) : false;
+                const refAttr = ref ? ` data-reference="${escapeAttr(ref)}"` : "";
+                const className = isFunction ? "function-block" : "tesauro-block";
+                return (
+                    '<span class="' +
+                    className +
+                    (hit ? " reference-hit" : "") +
+                    '"' +
+                    refAttr +
+                    ">" +
+                    matchBlock +
+                    "</span>"
+                );
+            }
+
+            if (wantsLet) {
+                if (!allowLet) return matchBlock;
+                if (!isValidLetBlock(matchBlock)) return wrapCodeError(matchBlock);
+                const refMatch = matchBlock.match(/reference\s*:\s*([^|}]+)/i);
+                let hit = false;
+                if (refMatch) {
+                    const rawRef = refMatch[1].trim();
+                    let kind = "personalized";
+                    let ref = rawRef;
+                    const dot = rawRef.indexOf(".");
+                    if (dot !== -1) {
+                        kind = rawRef.slice(0, dot).trim();
+                        ref = rawRef.slice(dot + 1).trim();
                     }
-                    return '<span class="let-block' + (hit ? " reference-hit" : "") + '">' + matchLet + '</span>';
+                    hit = referenceMatches(kind, ref);
                 }
-            );
+                return '<span class="let-block' + (hit ? " reference-hit" : "") + '">' + matchBlock + "</span>";
+            }
+
+            if (wantsDefinition) {
+                if (!allowLet) return matchBlock;
+                if (!isValidDefinitionBlock(matchBlock)) return wrapCodeError(matchBlock);
+                const ref = parseReferenceValue(matchBlock);
+                const hit = ref ? referenceMatches("variable", ref) : false;
+                return (
+                    '<span class="definition-block' +
+                    (hit ? " reference-hit" : "") +
+                    '">' +
+                    matchBlock +
+                    "</span>"
+                );
+            }
+
+            if (
+                normalized.includes("reference:") ||
+                normalized.includes("|result:") ||
+                normalized.includes("|type:") ||
+                normalized.includes("|value:")
+            ) {
+                return wrapCodeError(matchBlock);
+            }
+
+            return matchBlock;
+        });
+
+        if (allowTesauros || allowLet) {
             safe = safe.replace(
-                /\{\{\s*definition\b[^}]*\}\}/gi,
-                function (matchDef) {
-                    const refMatch = matchDef.match(/reference\s*:\s*([^|}]+)/i);
-                    const ref = refMatch ? refMatch[1].trim() : "";
-                    const hit = ref ? referenceMatches("variable", ref) : false;
-                    return '<span class="definition-block' + (hit ? " reference-hit" : "") + '">' + matchDef + '</span>';
+                /\{\{\s*(personalized|function|let|definition)\b[^}\n]*$/gim,
+                function (matchPartial) {
+                    return wrapCodeError(matchPartial);
                 }
             );
         }
@@ -2557,6 +2689,21 @@ function updateHighlight() {
                 /\{\{[#\/]section_[^}]*$/gm,
                 function (matchPartial) {
                     return '<span class="section-error-block">' + matchPartial + '</span>';
+                }
+            );
+        }
+
+        if (typeof highlightSections === "undefined" || highlightSections) {
+            safe = safe.replace(
+                /\{\{\s*#\s*(?!section_)[^}]*\}\}/gi,
+                function (matchInvalidSection) {
+                    return '<span class="section-error-block">' + matchInvalidSection + "</span>";
+                }
+            );
+            safe = safe.replace(
+                /\{\{\s*\/\s*(?!section_)[^}]*\}\}/gi,
+                function (matchInvalidSection) {
+                    return '<span class="section-error-block">' + matchInvalidSection + "</span>";
                 }
             );
         }
