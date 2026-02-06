@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.40 - 2026-02-06
+- El resaltado de referencias seleccionadas ahora se aplica también a bloques de tesauros, LET y definitions para que se vean en el canvas principal.
+- Las iteraciones de referencias tipo tesauro ahora resaltan también en representaciones inline y en bloques definition.
+
 ## v1.3.39 - 2026-03-02
 - El minimapa ahora se puede arrastrar libremente por la pantalla y redimensionar desde su esquina inferior derecha.
 - El recuadro visible del minimapa permite arrastrarse para desplazar el editor principal en vertical.

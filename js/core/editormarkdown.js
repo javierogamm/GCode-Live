@@ -1918,6 +1918,14 @@ function getReferenceAtSelection(text, selectionStart, selectionEnd) {
     });
     if (letRef) return letRef;
 
+    const definitionRef = findMatch(/\{\{\s*definition\b[^}]*\}\}/gi, (m) => {
+        const refMatch = m[0].match(/reference\s*:\s*([^|}]+)/i);
+        if (!refMatch) return null;
+        const ref = refMatch[1].trim();
+        return buildReferenceKey("variable", ref);
+    });
+    if (definitionRef) return definitionRef;
+
     const sectionRef = findMatch(/\bpersonalized\.([A-Za-z0-9_]+)\b/gi, (m) =>
         buildReferenceKey("personalized", m[1])
     );
@@ -2269,6 +2277,11 @@ function updateHighlight() {
             const re = new RegExp("\\bvariable\\." + escapeRegex(ref) + "\\b", "gi");
             html = html.replace(re, (match) => `<span class="reference-inline-hit">${match}</span>`);
         }
+        if (selectedReferenceKey.startsWith("function.") && highlightTesauros) {
+            const ref = selectedReferenceKey.slice("function.".length);
+            const re = new RegExp("\\bfunction\\." + escapeRegex(ref) + "\\b", "gi");
+            html = html.replace(re, (match) => `<span class="reference-inline-hit">${match}</span>`);
+        }
         return html;
     };
 
@@ -2526,7 +2539,10 @@ function updateHighlight() {
             safe = safe.replace(
                 /\{\{\s*definition\b[^}]*\}\}/gi,
                 function (matchDef) {
-                    return '<span class="definition-block">' + matchDef + '</span>';
+                    const refMatch = matchDef.match(/reference\s*:\s*([^|}]+)/i);
+                    const ref = refMatch ? refMatch[1].trim() : "";
+                    const hit = ref ? referenceMatches("variable", ref) : false;
+                    return '<span class="definition-block' + (hit ? " reference-hit" : "") + '">' + matchDef + '</span>';
                 }
             );
         }
