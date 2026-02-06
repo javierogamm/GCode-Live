@@ -229,8 +229,8 @@ body {
   position: fixed;
   right: 16px;
   bottom: 20px;
-  width: 120px;
-  height: 220px;
+  width: 180px;
+  height: 330px;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -249,10 +249,10 @@ body {
   inset: 0;
   background: repeating-linear-gradient(
     to bottom,
-    rgba(15, 23, 42, 0.25),
-    rgba(15, 23, 42, 0.25) 1px,
+    rgba(15, 23, 42, 0.12),
+    rgba(15, 23, 42, 0.12) 1px,
     transparent 1px,
-    transparent 5px
+    transparent 6px
   );
   opacity: 1;
 }
@@ -261,6 +261,22 @@ body {
   position: absolute;
   inset: 0;
   color: transparent;
+  pointer-events: none;
+}
+
+.mini-map-content .reference-hit,
+.mini-map-content .reference-inline-hit {
+  background: rgba(250, 204, 21, 0.7);
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.9);
+}
+
+.mini-map-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border: 1px solid rgba(59, 130, 246, 0.65);
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 6px;
   pointer-events: none;
 }
 /* =============================

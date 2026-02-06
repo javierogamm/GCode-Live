@@ -1846,7 +1846,8 @@ const miniMapState = {
     enabled: false,
     container: null,
     base: null,
-    content: null
+    content: null,
+    viewport: null
 };
 
 function escapeRegex(str) {
@@ -1943,11 +1944,13 @@ function ensureMiniMap() {
     container.innerHTML = `
         <div class="mini-map-base"></div>
         <div class="mini-map-content"></div>
+        <div class="mini-map-viewport"></div>
     `;
     document.body.appendChild(container);
     miniMapState.container = container;
     miniMapState.base = container.querySelector(".mini-map-base");
     miniMapState.content = container.querySelector(".mini-map-content");
+    miniMapState.viewport = container.querySelector(".mini-map-viewport");
 }
 
 function updateMiniMap() {
@@ -1984,6 +1987,14 @@ function updateMiniMap() {
         const lineHeightValue = parseFloat(computed.lineHeight) || 14;
         const mapLineHeight = Math.max(2, lineHeightValue * scale);
         miniMapState.base.style.backgroundSize = "100% " + mapLineHeight + "px";
+    }
+
+    if (miniMapState.viewport) {
+        const viewTop = markdownText.scrollTop * scale;
+        const viewHeight = Math.max(8, markdownText.clientHeight * scale);
+        const maxTop = Math.max(0, targetHeight - viewHeight);
+        miniMapState.viewport.style.top = Math.min(viewTop, maxTop) + "px";
+        miniMapState.viewport.style.height = Math.min(viewHeight, targetHeight) + "px";
     }
 }
 
@@ -2507,6 +2518,7 @@ markdownText.addEventListener("scroll", function () {
     if (lineNumbersContent) {
         lineNumbersContent.style.transform = "translateY(" + (-offsetY) + "px)";
     }
+    updateMiniMap();
 });
 
 /* =======================================
