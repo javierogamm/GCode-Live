@@ -1248,7 +1248,6 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
             step: 1,
             markdownText: "",
             markdownRefs: [],
-            wantsPasteImport: null,
             pasteTesauros: [],
             combinedTesauros: [],
             opcionesPorRef: {},
@@ -1293,7 +1292,8 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                 tipo,
                 momento,
                 agrupacion,
-                enMarkdown: markdownSet.has(key)
+                enMarkdown: markdownSet.has(key),
+                fromPaste: true
             });
         });
 
@@ -1316,7 +1316,8 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                 tipo,
                 momento,
                 agrupacion,
-                enMarkdown: markdownSet.has(key)
+                enMarkdown: markdownSet.has(key),
+                fromPaste: false
             });
         });
 
@@ -1428,19 +1429,14 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                 ${renderDetectedTable()}
                 <div style="border-top:1px solid #e2e8f0; padding-top:10px;">
                     <p style="margin:0; font-size:13px; color:#0f172a;">
-                        ¿Quieres importar los tesauros desde el copypaste de Gestiona?
+                        Continúa con el copypaste de tesauros de Gestiona para cruzar coincidencias.
                     </p>
                     <div style="display:flex; gap:10px; margin-top:8px;">
                         <button id="tmMdStartPaste" style="
                             flex:1; background:#10b981; color:white;
                             border:none; padding:8px; border-radius:8px;
                             cursor:pointer; font-weight:bold;
-                        " ${state.markdownRefs.length ? "" : "disabled"}>Sí, usar copypaste</button>
-                        <button id="tmMdSkipPaste" style="
-                            flex:1; background:#e2e8f0; border:1px solid #cbd5e1;
-                            padding:8px; border-radius:8px;
-                            cursor:pointer; font-weight:bold;
-                        " ${state.markdownRefs.length ? "" : "disabled"}>No, continuar sin copypaste</button>
+                        " ${state.markdownRefs.length ? "" : "disabled"}>Continuar con copypaste</button>
                     </div>
                 </div>
             `;
@@ -1472,17 +1468,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
             const btnStartPaste = container.querySelector("#tmMdStartPaste");
             if (btnStartPaste) {
                 btnStartPaste.addEventListener("click", () => {
-                    state.wantsPasteImport = true;
                     this.renderMarkdownImportStep(2);
-                });
-            }
-
-            const btnSkipPaste = container.querySelector("#tmMdSkipPaste");
-            if (btnSkipPaste) {
-                btnSkipPaste.addEventListener("click", () => {
-                    state.wantsPasteImport = false;
-                    state.combinedTesauros = this.buildMarkdownImportCombinedList({ forceDefaults: true });
-                    this.renderMarkdownImportStep(5);
                 });
             }
             return;
@@ -1561,7 +1547,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
 
             container.querySelector("#tmMdContinueSelectors").addEventListener("click", () => {
                 state.selectorsQueue = state.combinedTesauros
-                    .filter(item => item.tipo === "selector" && item.enMarkdown)
+                    .filter(item => item.tipo === "selector" && item.enMarkdown && item.fromPaste)
                     .map(item => ({
                         ref: item.ref,
                         nombre: item.nombre
@@ -1578,7 +1564,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
 
         if (step === 4) {
             const selectors = state.combinedTesauros
-                .filter(item => item.tipo === "selector" && item.enMarkdown);
+                .filter(item => item.tipo === "selector" && item.enMarkdown && item.fromPaste);
             const selectorList = selectors.length
                 ? `
                     <div style="max-height:200px; overflow:auto; border:1px solid #e2e8f0; border-radius:8px;">
