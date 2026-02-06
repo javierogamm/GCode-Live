@@ -1,5 +1,8 @@
 # Log de cambios
 
+## v1.3.34 - 2026-03-01
+- Se rediseñó el flujo de importación de tesauros desde Markdown con detección inicial, confirmación de copypaste, revisión en tabla y configuración guiada de selectores antes de confirmar.
+
 ## v1.3.33 - 2026-02-28
 - Se recuperó el resaltado de referencias coincidentes dentro de la miniatura y se hizo más visible en su escala.
 - La miniatura ahora muestra la ventana visible del editor y aumentó su tamaño en un 50%.
