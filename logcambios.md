@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.37 - 2026-03-02
+- El flujo de importación desde Markdown ahora obliga a continuar con el copypaste de tesauros para cruzar coincidencias.
+- La captura de referencias y valores solo se solicita para los selectores que coinciden con el copypaste y el Markdown.
+
 ## v1.3.36 - 2026-03-01
 - Se añadió el paso 4 en la importación desde Markdown para capturar uno a uno los valores de selectores detectados.
 
