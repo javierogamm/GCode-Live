@@ -1567,11 +1567,74 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                         nombre: item.nombre
                     }));
                 if (state.selectorsQueue.length) {
+                    this.renderMarkdownImportStep(4);
                     this.openMarkdownSelectorConfigModal();
                 } else {
                     this.renderMarkdownImportStep(5);
                 }
             });
+            return;
+        }
+
+        if (step === 4) {
+            const selectors = state.combinedTesauros
+                .filter(item => item.tipo === "selector" && item.enMarkdown);
+            const selectorList = selectors.length
+                ? `
+                    <div style="max-height:200px; overflow:auto; border:1px solid #e2e8f0; border-radius:8px;">
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <thead>
+                                <tr style="background:#f8fafc;">
+                                    <th style="padding:6px; border:1px solid #e2e8f0;">Referencia</th>
+                                    <th style="padding:6px; border:1px solid #e2e8f0;">Nombre</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${selectors.map(item => `
+                                    <tr>
+                                        <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.ref)}</td>
+                                        <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.nombre)}</td>
+                                    </tr>
+                                `).join("")}
+                            </tbody>
+                        </table>
+                    </div>
+                `
+                : "<p style='margin:0; color:#64748b;'>No hay selectores en el Markdown.</p>";
+
+            container.innerHTML = `
+                <h3 style="margin:0;">4. Completar valores de selectores</h3>
+                <p style="margin:0; font-size:13px; color:#4b5563;">
+                    Se pedirá el copypaste de referencias y valores para cada selector detectado en el Markdown.
+                </p>
+                ${selectorList}
+                <div style="display:flex; gap:10px;">
+                    <button id="tmMdCancel" style="
+                        flex:1; background:#f1f5f9; border:1px solid #cbd5e1;
+                        padding:8px; border-radius:8px; cursor:pointer;
+                    ">Cancelar</button>
+                    <button id="tmMdStartSelectorFlow" style="
+                        flex:1; background:#10b981; color:white;
+                        border:none; padding:8px; border-radius:8px;
+                        cursor:pointer; font-weight:bold;
+                    ">Iniciar captura de selectores</button>
+                </div>
+            `;
+
+            container.querySelector("#tmMdCancel").addEventListener("click", () => {
+                this.markdownImportModal.style.display = "none";
+            });
+
+            const btnStart = container.querySelector("#tmMdStartSelectorFlow");
+            if (btnStart) {
+                btnStart.addEventListener("click", () => {
+                    if (state.selectorsQueue.length) {
+                        this.openMarkdownSelectorConfigModal();
+                    } else {
+                        this.renderMarkdownImportStep(5);
+                    }
+                });
+            }
             return;
         }
 
@@ -1721,7 +1784,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
         modal.querySelector("#selectorCancel").addEventListener("click", () => {
             modal.remove();
             this.selectorConfigModal = null;
-            this.renderMarkdownImportStep(3);
+            this.renderMarkdownImportStep(4);
         });
 
         modal.querySelector("#selectorConfirm").addEventListener("click", () => {

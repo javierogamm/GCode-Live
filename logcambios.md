@@ -1,5 +1,8 @@
 # Log de cambios
 
+## v1.3.36 - 2026-03-01
+- Se añadió el paso 4 en la importación desde Markdown para capturar uno a uno los valores de selectores detectados.
+
 ## v1.3.35 - 2026-03-01
 - En la revisión de importación desde Markdown se ordenan primero los tesauros coincidentes y se resaltan en verde, dejando los no coincidentes en gris.
 - El paso de selección de valores ahora solo solicita selectores que aparecen en el Markdown.
