@@ -1847,7 +1847,22 @@ const miniMapState = {
     container: null,
     base: null,
     content: null,
-    viewport: null
+    viewport: null,
+    header: null,
+    scale: 1,
+    resizeObserver: null,
+    dragging: false,
+    dragOffset: { x: 0, y: 0 },
+    viewportDragging: false,
+    viewportStart: { y: 0, scrollTop: 0 }
+};
+
+const fixErrorState = {
+    button: null,
+    modal: null,
+    messageEl: null,
+    previewEl: null,
+    currentError: null
 };
 
 function escapeRegex(str) {
@@ -1862,9 +1877,101 @@ function escapeAttr(str) {
         .replace(/>/g, "&gt;");
 }
 
+// Comprobación de paréntesis balanceados dentro de condition:
+function areParenthesesBalanced(s) {
+    let count = 0;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s.charAt(i);
+        if (ch === "(") count++;
+        else if (ch === ")") {
+            count--;
+            if (count < 0) return false;
+        }
+    }
+    return count === 0;
+}
+
 function buildReferenceKey(kind, ref) {
     if (!kind || !ref) return null;
     return kind.toLowerCase() + "." + ref.trim().toLowerCase();
+}
+
+function getTagAttribute(tagText, attrName) {
+    if (!tagText || !attrName) return "";
+    const re = new RegExp(attrName + "\\s*:\\s*([^|}]+)", "i");
+    const match = tagText.match(re);
+    return match ? match[1].trim() : "";
+}
+
+function isQuotedValue(value) {
+    if (!value) return false;
+    const trimmed = value.trim();
+    if (trimmed.length < 2) return false;
+    if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) return true;
+    if (trimmed.startsWith("'") && trimmed.endsWith("'")) return true;
+    return false;
+}
+
+function conditionHasQuoteErrors(expr) {
+    if (!expr) return false;
+    if (/(==|!=)\s*(?=\)|$)/.test(expr)) {
+        return true;
+    }
+    const compareRegex = /\b(?:personalized|variable)\.[A-Za-z0-9_]+\s*(==|!=)\s*([^\s)]+)/g;
+    let match;
+    while ((match = compareRegex.exec(expr)) !== null) {
+        const value = match[2] ? match[2].trim() : "";
+        if (!value) return true;
+        if (value.toLowerCase() === "null") continue;
+        if (!isQuotedValue(value)) return true;
+    }
+    return false;
+}
+
+function validateSectionTag(tagText, isOpen) {
+    if (!tagText) return { valid: false, reason: "missing" };
+    if (isOpen) {
+        const baseOk = /^\{\{\s*#\s*section_[^}\s|]+\s*(\|\s*condition\s*:\s*[\s\S]*)?\}\}$/i.test(tagText);
+        if (!baseOk) return { valid: false, reason: "syntax" };
+        const condMatch = tagText.match(/condition\s*:\s*/i);
+        if (!condMatch || typeof condMatch.index !== "number") {
+            return { valid: false, reason: "condition" };
+        }
+        const expr = tagText.slice(condMatch.index + condMatch[0].length, tagText.length - 2).trim();
+        if (!expr) return { valid: false, reason: "condition" };
+        if (!areParenthesesBalanced(expr)) return { valid: false, reason: "parentheses" };
+        if (conditionHasQuoteErrors(expr)) return { valid: false, reason: "quotes" };
+        return { valid: true };
+    }
+    const closeOk = /^\{\{\s*\/\s*section_[^}\s|]+\s*\}\}$/i.test(tagText);
+    return { valid: closeOk, reason: closeOk ? null : "syntax" };
+}
+
+function validateTesauroTag(tagText, kind) {
+    const reference = getTagAttribute(tagText, "reference");
+    return { valid: Boolean(reference && reference.trim()), reference: reference.trim(), kind };
+}
+
+function validateLetTag(tagText) {
+    const reference = getTagAttribute(tagText, "reference");
+    const result = getTagAttribute(tagText, "result");
+    return {
+        valid: Boolean(reference && reference.trim() && result && result.trim()),
+        reference: reference.trim(),
+        result: result.trim()
+    };
+}
+
+function validateDefinitionTag(tagText) {
+    const reference = getTagAttribute(tagText, "reference");
+    const type = getTagAttribute(tagText, "type");
+    const value = getTagAttribute(tagText, "value");
+    return {
+        valid: Boolean(reference && reference.trim() && type && type.trim() && value && value.trim()),
+        reference: reference.trim(),
+        type: type.trim(),
+        value: value.trim()
+    };
 }
 
 function getReferenceAtSelection(text, selectionStart, selectionEnd) {
@@ -1934,6 +2041,71 @@ function updateSelectedReference() {
         updateHighlight();
         updateMiniMap();
     }
+    updateFixErrorButton();
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function setMiniMapPosition(left, top) {
+    if (!miniMapState.container) return;
+    const margin = 8;
+    const maxLeft = window.innerWidth - miniMapState.container.offsetWidth - margin;
+    const maxTop = window.innerHeight - miniMapState.container.offsetHeight - margin;
+    const nextLeft = clamp(left, margin, Math.max(margin, maxLeft));
+    const nextTop = clamp(top, margin, Math.max(margin, maxTop));
+    miniMapState.container.style.left = nextLeft + "px";
+    miniMapState.container.style.top = nextTop + "px";
+    miniMapState.container.style.right = "auto";
+    miniMapState.container.style.bottom = "auto";
+}
+
+function setupMiniMapInteractions() {
+    if (!miniMapState.container || !miniMapState.header || !miniMapState.viewport) return;
+
+    miniMapState.header.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
+        const rect = miniMapState.container.getBoundingClientRect();
+        miniMapState.dragging = true;
+        miniMapState.dragOffset = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+        const onMove = (evt) => {
+            if (!miniMapState.dragging) return;
+            setMiniMapPosition(evt.clientX - miniMapState.dragOffset.x, evt.clientY - miniMapState.dragOffset.y);
+        };
+        const onUp = () => {
+            miniMapState.dragging = false;
+            document.removeEventListener("mousemove", onMove);
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp, { once: true });
+    });
+
+    miniMapState.viewport.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        miniMapState.viewportDragging = true;
+        miniMapState.viewportStart = {
+            y: e.clientY,
+            scrollTop: markdownText.scrollTop
+        };
+        const onMove = (evt) => {
+            if (!miniMapState.viewportDragging) return;
+            const deltaY = evt.clientY - miniMapState.viewportStart.y;
+            const scale = miniMapState.scale || 1;
+            const maxScroll = Math.max(0, markdownText.scrollHeight - markdownText.clientHeight);
+            markdownText.scrollTop = clamp(miniMapState.viewportStart.scrollTop + deltaY / scale, 0, maxScroll);
+        };
+        const onUp = () => {
+            miniMapState.viewportDragging = false;
+            document.removeEventListener("mousemove", onMove);
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp, { once: true });
+    });
 }
 
 function ensureMiniMap() {
@@ -1942,6 +2114,10 @@ function ensureMiniMap() {
     container.id = "miniMap";
     container.className = "mini-map";
     container.innerHTML = `
+        <div class="mini-map-header">
+            <span class="mini-map-grip">⋮⋮</span>
+            <span>Minimapa</span>
+        </div>
         <div class="mini-map-base"></div>
         <div class="mini-map-content"></div>
         <div class="mini-map-viewport"></div>
@@ -1951,6 +2127,20 @@ function ensureMiniMap() {
     miniMapState.base = container.querySelector(".mini-map-base");
     miniMapState.content = container.querySelector(".mini-map-content");
     miniMapState.viewport = container.querySelector(".mini-map-viewport");
+    miniMapState.header = container.querySelector(".mini-map-header");
+
+    const defaultLeft = window.innerWidth - container.offsetWidth - 16;
+    const defaultTop = window.innerHeight - container.offsetHeight - 20;
+    setMiniMapPosition(defaultLeft, defaultTop);
+
+    setupMiniMapInteractions();
+
+    if (!miniMapState.resizeObserver && typeof ResizeObserver !== "undefined") {
+        miniMapState.resizeObserver = new ResizeObserver(() => {
+            updateMiniMap();
+        });
+        miniMapState.resizeObserver.observe(container);
+    }
 }
 
 function updateMiniMap() {
@@ -1975,28 +2165,304 @@ function updateMiniMap() {
     const sourceWidth = Math.max(hl.scrollWidth, hl.offsetWidth, 1);
     const sourceHeight = Math.max(markdownText.scrollHeight, hl.scrollHeight, 1);
     const targetWidth = miniMapState.container.clientWidth || 1;
-    const targetHeight = miniMapState.container.clientHeight || 1;
+    const headerOffset = miniMapState.header ? miniMapState.header.offsetHeight : 0;
+    const targetHeight = Math.max(1, (miniMapState.container.clientHeight || 1) - headerOffset);
     const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+    miniMapState.scale = scale;
 
     miniMapState.content.style.width = sourceWidth + "px";
     miniMapState.content.style.height = sourceHeight + "px";
     miniMapState.content.style.transformOrigin = "top left";
     miniMapState.content.style.transform = "scale(" + scale + ")";
+    miniMapState.content.style.top = headerOffset + "px";
+    miniMapState.content.style.bottom = "auto";
 
     if (miniMapState.base) {
         const lineHeightValue = parseFloat(computed.lineHeight) || 14;
         const mapLineHeight = Math.max(2, lineHeightValue * scale);
         miniMapState.base.style.backgroundSize = "100% " + mapLineHeight + "px";
+        miniMapState.base.style.top = headerOffset + "px";
+        miniMapState.base.style.height = targetHeight + "px";
+        miniMapState.base.style.bottom = "auto";
     }
 
     if (miniMapState.viewport) {
-        const viewTop = markdownText.scrollTop * scale;
+        const viewTop = headerOffset + markdownText.scrollTop * scale;
         const viewHeight = Math.max(8, markdownText.clientHeight * scale);
-        const maxTop = Math.max(0, targetHeight - viewHeight);
+        const maxTop = Math.max(headerOffset, headerOffset + targetHeight - viewHeight);
         miniMapState.viewport.style.top = Math.min(viewTop, maxTop) + "px";
         miniMapState.viewport.style.height = Math.min(viewHeight, targetHeight) + "px";
     }
 }
+
+function fixConditionQuotes(expr) {
+    if (!expr) return "\"\"";
+    if (/(==|!=)\s*(?=\)|$)/.test(expr)) {
+        return expr.replace(/(==|!=)\s*(?=\)|$)/g, '$1 ""');
+    }
+    return expr.replace(
+        /(\b(?:personalized|variable)\.[A-Za-z0-9_]+\s*(==|!=)\s*)([^\s)]+)/g,
+        function (match, left, operator, value) {
+            if (!value) return left + '""';
+            if (value.toLowerCase() === "null") return left + "null";
+            if (isQuotedValue(value)) return left + value;
+            return left + '"' + value + '"';
+        }
+    );
+}
+
+function buildSectionFix(tagText, isOpen) {
+    const nameMatch = tagText.match(/section_([A-Za-z0-9_]+)/i);
+    const name = nameMatch ? nameMatch[1] : "SECCION";
+    if (!isOpen) {
+        return `{{/section_${name}}}`;
+    }
+    const condMatch = tagText.match(/condition\s*:\s*/i);
+    let expr = "";
+    if (condMatch && typeof condMatch.index === "number") {
+        expr = tagText
+            .slice(condMatch.index + condMatch[0].length)
+            .replace(/\}\}\s*$/, "")
+            .trim();
+    }
+    if (!expr) expr = "\"\"";
+    expr = fixConditionQuotes(expr);
+    return `{{#section_${name} | condition:${expr}}}`;
+}
+
+function buildTesauroFix(tagText, kind) {
+    const ref = getTagAttribute(tagText, "reference") || "ReferenciaTesauro";
+    return `{{${kind} | reference: ${ref}}}`;
+}
+
+function buildLetFix(tagText) {
+    const reference = getTagAttribute(tagText, "reference") || "personalized.ReferenciaTesauro";
+    const result = getTagAttribute(tagText, "result") || "...";
+    return `{{let | reference: ${reference} | result: ${result}}}`;
+}
+
+function buildDefinitionFix(tagText) {
+    const reference = getTagAttribute(tagText, "reference") || "MiVariable";
+    const type = getTagAttribute(tagText, "type") || "numeric";
+    const value = getTagAttribute(tagText, "value") || "0";
+    return `{{definition | reference: ${reference} | type: ${type} | value: ${value}}}`;
+}
+
+function findErrorAtSelection(text, selectionStart, selectionEnd) {
+    const cursor = Math.min(selectionStart || 0, selectionEnd || 0);
+    const ranges = [
+        {
+            regex: /\{\{\s*(#|\/)\s*section_[^}]*\}\}/gi,
+            check: (match) => {
+                const isOpen = match[1] === "#";
+                const validation = validateSectionTag(match[0], isOpen);
+                if (validation.valid) return null;
+                return {
+                    suggestion: buildSectionFix(match[0], isOpen),
+                    type: "section"
+                };
+            }
+        },
+        {
+            regex: /\{\{\s*(personalized|function)\b[^}]*\}\}/gi,
+            check: (match) => {
+                const validation = validateTesauroTag(match[0], match[1]);
+                if (validation.valid) return null;
+                return {
+                    suggestion: buildTesauroFix(match[0], match[1]),
+                    type: "tesauro"
+                };
+            }
+        },
+        {
+            regex: /\{\{\s*let\b[^}]*\}\}/gi,
+            check: (match) => {
+                const validation = validateLetTag(match[0]);
+                if (validation.valid) return null;
+                return {
+                    suggestion: buildLetFix(match[0]),
+                    type: "let"
+                };
+            }
+        },
+        {
+            regex: /\{\{\s*definition\b[^}]*\}\}/gi,
+            check: (match) => {
+                const validation = validateDefinitionTag(match[0]);
+                if (validation.valid) return null;
+                return {
+                    suggestion: buildDefinitionFix(match[0]),
+                    type: "definition"
+                };
+            }
+        }
+    ];
+
+    for (const rule of ranges) {
+        rule.regex.lastIndex = 0;
+        let match;
+        while ((match = rule.regex.exec(text)) !== null) {
+            const start = match.index;
+            const end = match.index + match[0].length;
+            if (cursor >= start && cursor <= end) {
+                const error = rule.check(match);
+                if (error) {
+                    return {
+                        start,
+                        end,
+                        original: match[0],
+                        suggestion: error.suggestion,
+                        type: error.type
+                    };
+                }
+            }
+        }
+    }
+
+    const lineStart = text.lastIndexOf("\n", cursor - 1) + 1;
+    const lineEnd = text.indexOf("\n", cursor);
+    const safeLineEnd = lineEnd === -1 ? text.length : lineEnd;
+    const line = text.slice(lineStart, safeLineEnd);
+    const cursorInLine = cursor - lineStart;
+    const openIndex = line.lastIndexOf("{{", cursorInLine);
+    if (openIndex !== -1) {
+        const closeIndex = line.indexOf("}}", openIndex);
+        if (closeIndex === -1) {
+            const partial = line.slice(openIndex);
+            if (/^\{\{\s*#\s*section_/i.test(partial) || /^\{\{\s*\/\s*section_/i.test(partial)) {
+                const isOpen = /^\{\{\s*#\s*section_/i.test(partial);
+                return {
+                    start: lineStart + openIndex,
+                    end: safeLineEnd,
+                    original: partial,
+                    suggestion: buildSectionFix(partial + "}}", isOpen),
+                    type: "section"
+                };
+            }
+            if (/^\{\{\s*(personalized|function)\b/i.test(partial)) {
+                const kindMatch = partial.match(/^\{\{\s*(personalized|function)\b/i);
+                const kind = kindMatch ? kindMatch[1] : "personalized";
+                return {
+                    start: lineStart + openIndex,
+                    end: safeLineEnd,
+                    original: partial,
+                    suggestion: buildTesauroFix(partial + "}}", kind),
+                    type: "tesauro"
+                };
+            }
+            if (/^\{\{\s*let\b/i.test(partial)) {
+                return {
+                    start: lineStart + openIndex,
+                    end: safeLineEnd,
+                    original: partial,
+                    suggestion: buildLetFix(partial + "}}"),
+                    type: "let"
+                };
+            }
+            if (/^\{\{\s*definition\b/i.test(partial)) {
+                return {
+                    start: lineStart + openIndex,
+                    end: safeLineEnd,
+                    original: partial,
+                    suggestion: buildDefinitionFix(partial + "}}"),
+                    type: "definition"
+                };
+            }
+        }
+    }
+
+    return null;
+}
+
+function ensureFixErrorModal() {
+    if (fixErrorState.modal) return;
+    const modal = document.createElement("div");
+    modal.id = "fixErrorModal";
+    modal.className = "modal-overlay";
+    modal.style.display = "none";
+    modal.innerHTML = `
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Corregir error detectado</h3>
+                <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="modal-body">
+                <p id="fixErrorMessage" class="muted"></p>
+                <div class="modal-preview">
+                    <label class="muted">Sugerencia:</label>
+                    <pre id="fixErrorPreview"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="modal-close">Cancelar</button>
+                <button type="button" id="fixErrorApplyBtn">Aplicar corrección</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    fixErrorState.modal = modal;
+    fixErrorState.messageEl = modal.querySelector("#fixErrorMessage");
+    fixErrorState.previewEl = modal.querySelector("#fixErrorPreview");
+
+    const closeButtons = modal.querySelectorAll(".modal-close");
+    closeButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            modal.style.display = "none";
+        });
+    });
+
+    const applyBtn = modal.querySelector("#fixErrorApplyBtn");
+    if (applyBtn) {
+        applyBtn.addEventListener("click", () => {
+            if (!fixErrorState.currentError) return;
+            const { start, end, suggestion } = fixErrorState.currentError;
+            const before = markdownText.value.slice(0, start);
+            const after = markdownText.value.slice(end);
+            markdownText.value = before + suggestion + after;
+            const newCursor = start + suggestion.length;
+            markdownText.selectionStart = newCursor;
+            markdownText.selectionEnd = newCursor;
+            modal.style.display = "none";
+            updateHighlight();
+            updateFixErrorButton();
+        });
+    }
+}
+
+function updateFixErrorButton() {
+    if (!fixErrorState.button) return;
+    const error = findErrorAtSelection(
+        markdownText.value,
+        markdownText.selectionStart || 0,
+        markdownText.selectionEnd || 0
+    );
+    fixErrorState.currentError = error;
+    if (error && error.suggestion) {
+        fixErrorState.button.style.display = "inline-flex";
+    } else {
+        fixErrorState.button.style.display = "none";
+    }
+}
+
+function openFixErrorModal() {
+    ensureFixErrorModal();
+    if (!fixErrorState.modal || !fixErrorState.currentError) return;
+    const error = fixErrorState.currentError;
+    if (fixErrorState.messageEl) {
+        fixErrorState.messageEl.textContent = `Se detectó un error en ${error.type}.`;
+    }
+    if (fixErrorState.previewEl) {
+        fixErrorState.previewEl.textContent = error.suggestion;
+    }
+    fixErrorState.modal.style.display = "flex";
+}
+
+window.registerFixErrorButton = (btn) => {
+    fixErrorState.button = btn;
+    updateFixErrorButton();
+};
+
+window.openFixErrorModal = openFixErrorModal;
 
 const miniMapToggle = document.getElementById("toggleMiniMap");
 if (miniMapToggle) {
@@ -2172,25 +2638,11 @@ function updateHighlight() {
             .replace(/>/g, "&gt;");
     }
 
-    // Comprobación de paréntesis balanceados dentro de condition:
-    function areParenthesesBalanced(s) {
-        let count = 0;
-        for (let i = 0; i < s.length; i++) {
-            const ch = s.charAt(i);
-            if (ch === "(") count++;
-            else if (ch === ")") {
-                count--;
-                if (count < 0) return false;
-            }
-        }
-        return count === 0;
-    }
-
     // 1) TOKENIZAR texto en:
     //    - trozos normales
     //    - tags de sección {{#section_NAME ...}} / {{/section_NAME}}
     const tokens = [];
-    const tagRegex = /\{\{(#|\/)section_([^}\s|]+)[^}]*\}\}/g;
+    const tagRegex = /\{\{\s*(#|\/)\s*section_([^}\s|]+)[^}]*\}\}/g;
     let lastIndex = 0;
     let m;
 
@@ -2210,21 +2662,8 @@ function updateHighlight() {
 
         if (kind === "#") {
             // APERTURA VÁLIDA SOLO SI:  {{#section_NOMBRE | condition:...}}
-            let syntaxOk = /^\{\{#section_[^}\s|]+\s*\|\s*condition\s*:/i.test(full);
-
-            // Validar paréntesis en la expresión de condition:
-            if (syntaxOk) {
-                const condMatch = full.match(/condition\s*:\s*/i);
-                if (condMatch && typeof condMatch.index === "number") {
-                    const expr = full.slice(
-                        condMatch.index + condMatch[0].length,
-                        full.length - 2 // quitar "}}"
-                    );
-                    if (!areParenthesesBalanced(expr)) {
-                        syntaxOk = false;
-                    }
-                }
-            }
+            const validation = validateSectionTag(full, true);
+            const syntaxOk = validation.valid;
 
             tokens.push({
                 type: "open",
@@ -2236,7 +2675,8 @@ function updateHighlight() {
             });
         } else {
             // CIERRE VÁLIDO SOLO SI: {{/section_NOMBRE}}
-            const syntaxOkClose = /^\{\{\/section_[^}\s|]+\s*\}\}$/i.test(full);
+            const validation = validateSectionTag(full, false);
+            const syntaxOkClose = validation.valid;
             tokens.push({
                 type: "close",
                 name: name,
@@ -2371,25 +2811,27 @@ function updateHighlight() {
         // TESAUROS (toggle)
         if (typeof highlightTesauros === "undefined" || highlightTesauros) {
             safe = safe.replace(
-                /\{\{\s*personalized\s*\|\s*reference\s*:[^}]+\}\}/g,
+                /\{\{\s*personalized\b[^}]*\}\}/gi,
                 function (matchTesauro) {
-                    const refMatch = matchTesauro.match(/reference\s*:\s*([^}|]+)\s*\}\}/i);
-                    const ref = refMatch ? refMatch[1].trim() : "";
+                    const validation = validateTesauroTag(matchTesauro, "personalized");
+                    const ref = validation.reference || "";
                     const hit = referenceMatches("personalized", ref);
+                    const isError = !validation.valid;
                     const safeMatch = matchTesauro.replace(/&/g, "&amp;");
                     const refAttr = ref ? ` data-reference="${escapeAttr(ref)}"` : "";
-                    return '<span class="tesauro-block' + (hit ? " reference-hit" : "") + '"' + refAttr + '>' + safeMatch + '</span>';
+                    return '<span class="tesauro-block' + (hit ? " reference-hit" : "") + (isError ? " code-error-block" : "") + '"' + refAttr + '>' + safeMatch + '</span>';
                 }
             );
             safe = safe.replace(
-                /\{\{\s*function\s*\|\s*reference\s*:[^}]+\}\}/gi,
+                /\{\{\s*function\b[^}]*\}\}/gi,
                 function (matchFunction) {
-                    const refMatch = matchFunction.match(/reference\s*:\s*([^}|]+)\s*\}\}/i);
-                    const ref = refMatch ? refMatch[1].trim() : "";
+                    const validation = validateTesauroTag(matchFunction, "function");
+                    const ref = validation.reference || "";
                     const hit = referenceMatches("function", ref);
+                    const isError = !validation.valid;
                     const safeMatch = matchFunction.replace(/&/g, "&amp;");
                     const refAttr = ref ? ` data-reference="${escapeAttr(ref)}"` : "";
-                    return '<span class="function-block' + (hit ? " reference-hit" : "") + '"' + refAttr + '>' + safeMatch + '</span>';
+                    return '<span class="function-block' + (hit ? " reference-hit" : "") + (isError ? " code-error-block" : "") + '"' + refAttr + '>' + safeMatch + '</span>';
                 }
             );
         }
@@ -2399,6 +2841,7 @@ function updateHighlight() {
             safe = safe.replace(
                 /\{\{\s*let\b[^}]*\}\}/gi,
                 function (matchLet) {
+                    const validation = validateLetTag(matchLet);
                     const refMatch = matchLet.match(/reference\s*:\s*([^|}]+)/i);
                     let hit = false;
                     if (refMatch) {
@@ -2412,13 +2855,16 @@ function updateHighlight() {
                         }
                         hit = referenceMatches(kind, ref);
                     }
-                    return '<span class="let-block' + (hit ? " reference-hit" : "") + '">' + matchLet + '</span>';
+                    const isError = !validation.valid;
+                    return '<span class="let-block' + (hit ? " reference-hit" : "") + (isError ? " code-error-block" : "") + '">' + matchLet + '</span>';
                 }
             );
             safe = safe.replace(
                 /\{\{\s*definition\b[^}]*\}\}/gi,
                 function (matchDef) {
-                    return '<span class="definition-block">' + matchDef + '</span>';
+                    const validation = validateDefinitionTag(matchDef);
+                    const isError = !validation.valid;
+                    return '<span class="definition-block' + (isError ? " code-error-block" : "") + '">' + matchDef + '</span>';
                 }
             );
         }
@@ -2430,9 +2876,33 @@ function updateHighlight() {
             seg.depth === 0
         ) {
             safe = safe.replace(
-                /\{\{[#\/]section_[^}]*$/gm,
+                /\{\{\s*[#\/]\s*section_[^}]*$/gm,
                 function (matchPartial) {
                     return '<span class="section-error-block">' + matchPartial + '</span>';
+                }
+            );
+        }
+
+        if (typeof highlightTesauros === "undefined" || highlightTesauros) {
+            safe = safe.replace(
+                /\{\{\s*(personalized|function)\b[^}]*$/gim,
+                function (matchPartial) {
+                    return '<span class="code-error-block">' + matchPartial + '</span>';
+                }
+            );
+        }
+
+        if (typeof highlightLet === "undefined" || highlightLet) {
+            safe = safe.replace(
+                /\{\{\s*let\b[^}]*$/gim,
+                function (matchPartial) {
+                    return '<span class="code-error-block">' + matchPartial + '</span>';
+                }
+            );
+            safe = safe.replace(
+                /\{\{\s*definition\b[^}]*$/gim,
+                function (matchPartial) {
+                    return '<span class="code-error-block">' + matchPartial + '</span>';
                 }
             );
         }
@@ -2502,6 +2972,7 @@ function updateHighlight() {
 
     updateLineNumbers();
     updateMiniMap();
+    updateFixErrorButton();
 }
 
 

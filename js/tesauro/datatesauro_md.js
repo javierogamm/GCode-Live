@@ -80,6 +80,31 @@ const DataTesauro = {
                 this.togglePanel();
             });
         }
+
+        if (!document.getElementById("btnFixError")) {
+            const fixBtn = document.createElement("button");
+            fixBtn.id = "btnFixError";
+            fixBtn.className = "floating-action-btn floating-tesauro-btn";
+            fixBtn.textContent = "🛠 Corregir error";
+            fixBtn.style.display = "none";
+
+            if (floatingRow) {
+                floatingRow.appendChild(fixBtn);
+            } else {
+                document.body.appendChild(fixBtn);
+            }
+
+            fixBtn.addEventListener("mousedown", (e) => e.preventDefault());
+            fixBtn.addEventListener("click", () => {
+                if (typeof window.openFixErrorModal === "function") {
+                    window.openFixErrorModal();
+                }
+            });
+
+            if (typeof window.registerFixErrorButton === "function") {
+                window.registerFixErrorButton(fixBtn);
+            }
+        }
         // === NUEVO BOTÓN FLOTANTE: acceso directo al gestor completo ===
         if (!document.getElementById("btnTesauroManagerFloating")) {
             const btn2 = document.createElement("button");

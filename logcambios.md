@@ -1,5 +1,13 @@
 # Log de cambios
 
+## v1.3.39 - 2026-03-03
+- El minimapa ahora es flotante, se puede mover libremente y permite resize con arrastre.
+- El recuadro del minimapa es arrastrable para desplazar el editor principal al mismo tiempo.
+- El resaltado de referencias seleccionadas ahora cubre tesauros, sections, lets y el minimapa.
+- Se agregó validación y resaltado de errores para tesauros, LET y definitions, ignorando espacios faltantes.
+- La validación de sections ahora exige comillas en comparaciones salvo cuando el valor es null.
+- Se añadió el botón "Corregir error" con modal de sugerencia y reemplazo automático.
+
 ## v1.3.38 - 2026-03-02
 - El importador desde Markdown ahora solo crea tesauros que coinciden entre el Markdown y el copypaste.
 
