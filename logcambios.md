@@ -1,5 +1,18 @@
 # Log de cambios
 
+## v1.3.33 - 2026-02-28
+- Se recuperó el resaltado de referencias coincidentes dentro de la miniatura y se hizo más visible en su escala.
+- La miniatura ahora muestra la ventana visible del editor y aumentó su tamaño en un 50%.
+- Las líneas de fondo del minimapa se suavizaron para verse más sutiles.
+
+## v1.3.32 - 2026-02-28
+- Se ajustó la miniatura para representar en miniatura el overlay real del editor, con líneas finas negras sobre fondo blanco.
+- El minimapa ahora respeta los toggles de resaltado y refleja las iteraciones de la referencia seleccionada.
+
+## v1.3.31 - 2026-02-28
+- Se añadió el resaltado de referencias seleccionadas (sections, tesauros y LET) para localizar todas sus iteraciones en el texto.
+- Se incorporó un toggle de miniatura con minimapa flotante que muestra líneas, bloques de toggle y las referencias resaltadas.
+
 ## v1.3.30 - 2026-02-27
 - Se añadió scroll vertical al modal de doble columna multipárrafo para manejar listas largas de párrafos sin perder la barra de acciones.
 
