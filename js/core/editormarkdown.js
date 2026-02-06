@@ -1846,7 +1846,7 @@ const miniMapState = {
     enabled: false,
     container: null,
     base: null,
-    markers: null
+    content: null
 };
 
 function escapeRegex(str) {
@@ -1942,71 +1942,48 @@ function ensureMiniMap() {
     container.className = "mini-map";
     container.innerHTML = `
         <div class="mini-map-base"></div>
-        <div class="mini-map-markers"></div>
+        <div class="mini-map-content"></div>
     `;
     document.body.appendChild(container);
     miniMapState.container = container;
     miniMapState.base = container.querySelector(".mini-map-base");
-    miniMapState.markers = container.querySelector(".mini-map-markers");
-}
-
-function lineHasSelectedReference(line, refKey) {
-    if (!refKey) return false;
-    const [kind, ref] = refKey.split(".");
-    const safeRef = escapeRegex(ref || "");
-    if (!safeRef) return false;
-    if (kind === "personalized") {
-        const inline = new RegExp("\\bpersonalized\\." + safeRef + "\\b", "i");
-        const block = new RegExp("\\{\\{\\s*personalized\\s*\\|\\s*reference\\s*:\\s*" + safeRef + "\\s*\\}\\}", "i");
-        return inline.test(line) || block.test(line);
-    }
-    if (kind === "variable") {
-        return new RegExp("\\bvariable\\." + safeRef + "\\b", "i").test(line);
-    }
-    if (kind === "function") {
-        const block = new RegExp("\\{\\{\\s*function\\s*\\|\\s*reference\\s*:\\s*" + safeRef + "\\s*\\}\\}", "i");
-        return block.test(line) || new RegExp("\\bfunction\\." + safeRef + "\\b", "i").test(line);
-    }
-    return false;
+    miniMapState.content = container.querySelector(".mini-map-content");
 }
 
 function updateMiniMap() {
     if (!miniMapState.enabled) return;
     ensureMiniMap();
-    const text = markdownText.value || "";
-    const lines = text.split(/\n/);
-    const totalLines = Math.max(lines.length, 1);
+    if (!miniMapState.content) return;
+
+    const hl = document.getElementById("mdHighlighter");
+    if (!hl) return;
+    miniMapState.content.innerHTML = hl.innerHTML;
+
+    const computed = getComputedStyle(hl);
+    miniMapState.content.style.padding = computed.padding;
+    miniMapState.content.style.fontFamily = computed.fontFamily;
+    miniMapState.content.style.fontSize = computed.fontSize;
+    miniMapState.content.style.lineHeight = computed.lineHeight;
+    miniMapState.content.style.whiteSpace = computed.whiteSpace;
+    miniMapState.content.style.wordWrap = computed.wordWrap;
+    miniMapState.content.style.overflowWrap = computed.overflowWrap;
+    miniMapState.content.style.wordBreak = computed.wordBreak;
+
+    const sourceWidth = Math.max(hl.scrollWidth, hl.offsetWidth, 1);
+    const sourceHeight = Math.max(markdownText.scrollHeight, hl.scrollHeight, 1);
+    const targetWidth = miniMapState.container.clientWidth || 1;
+    const targetHeight = miniMapState.container.clientHeight || 1;
+    const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+
+    miniMapState.content.style.width = sourceWidth + "px";
+    miniMapState.content.style.height = sourceHeight + "px";
+    miniMapState.content.style.transformOrigin = "top left";
+    miniMapState.content.style.transform = "scale(" + scale + ")";
 
     if (miniMapState.base) {
-        const mapHeight = miniMapState.container ? miniMapState.container.clientHeight : 0;
-        const lineSize = mapHeight ? Math.max(2, mapHeight / totalLines) : 4;
-        miniMapState.base.style.backgroundSize = "100% " + lineSize + "px";
-    }
-
-    if (miniMapState.markers) {
-        miniMapState.markers.innerHTML = "";
-        const sectionRegex = /\{\{[#\/]section_[^}]*\}\}/i;
-        const tesauroRegex = /\{\{\s*(personalized|function)\s*\|\s*reference\s*:[^}]+\}\}/i;
-        const letRegex = /\{\{\s*let\b[^}]*\}\}/i;
-
-        lines.forEach((line, index) => {
-            const types = [];
-            if (sectionRegex.test(line)) types.push("section");
-            if (tesauroRegex.test(line)) types.push("tesauro");
-            if (letRegex.test(line)) types.push("let");
-            if (lineHasSelectedReference(line, selectedReferenceKey)) types.push("reference");
-
-            if (!types.length) return;
-
-            const topPercent = totalLines <= 1 ? 0 : (index / (totalLines - 1)) * 100;
-            types.forEach((type, offset) => {
-                const marker = document.createElement("div");
-                marker.className = "mini-map-marker mini-map-marker-" + type;
-                marker.style.top = topPercent + "%";
-                marker.style.left = 6 + offset * 6 + "px";
-                miniMapState.markers.appendChild(marker);
-            });
-        });
+        const lineHeightValue = parseFloat(computed.lineHeight) || 14;
+        const mapLineHeight = Math.max(2, lineHeightValue * scale);
+        miniMapState.base.style.backgroundSize = "100% " + mapLineHeight + "px";
     }
 }
 
@@ -2156,17 +2133,19 @@ function updateHighlight() {
 
     const referenceMatches = (kind, ref) => {
         if (!selectedReferenceKey || !kind || !ref) return false;
+        if ((kind === "personalized" || kind === "function") && !highlightTesauros) return false;
+        if (kind === "variable" && !highlightLet) return false;
         return selectedReferenceKey === buildReferenceKey(kind, ref);
     };
 
     const applyInlineReferenceHighlights = (html) => {
         if (!selectedReferenceKey) return html;
-        if (selectedReferenceKey.startsWith("personalized.")) {
+        if (selectedReferenceKey.startsWith("personalized.") && highlightTesauros) {
             const ref = selectedReferenceKey.slice("personalized.".length);
             const re = new RegExp("\\bpersonalized\\." + escapeRegex(ref) + "\\b", "gi");
             html = html.replace(re, (match) => `<span class="reference-inline-hit">${match}</span>`);
         }
-        if (selectedReferenceKey.startsWith("variable.")) {
+        if (selectedReferenceKey.startsWith("variable.") && highlightLet) {
             const ref = selectedReferenceKey.slice("variable.".length);
             const re = new RegExp("\\bvariable\\." + escapeRegex(ref) + "\\b", "gi");
             html = html.replace(re, (match) => `<span class="reference-inline-hit">${match}</span>`);

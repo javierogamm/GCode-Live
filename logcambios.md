@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.32 - 2026-02-28
+- Se ajustó la miniatura para representar en miniatura el overlay real del editor, con líneas finas negras sobre fondo blanco.
+- El minimapa ahora respeta los toggles de resaltado y refleja las iteraciones de la referencia seleccionada.
+
 ## v1.3.31 - 2026-02-28
 - Se añadió el resaltado de referencias seleccionadas (sections, tesauros y LET) para localizar todas sus iteraciones en el texto.
 - Se incorporó un toggle de miniatura con minimapa flotante que muestra líneas, bloques de toggle y las referencias resaltadas.
