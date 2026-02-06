@@ -1,5 +1,8 @@
 # Log de cambios
 
+## v1.3.42 - 2026-02-06
+- El resaltado de errores marca como inválidos los bloques de tesauros, funciones, sections, LET y definitions con llaves de más o de menos.
+
 ## v1.3.41 - 2026-02-06
 - El minimapa se activa por defecto y sincroniza su estado con el botón de miniatura.
 - El resaltado de errores ahora marca en rojo tesauros, LET y definitions mal configurados, además de detectar etiquetas de sección mal escritas.

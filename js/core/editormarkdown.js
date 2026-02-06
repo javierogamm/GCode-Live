@@ -2554,6 +2554,26 @@ function updateHighlight() {
         }
     }
 
+    const codeErrorStart = "__CODE_ERROR_START__";
+    const codeErrorEnd = "__CODE_ERROR_END__";
+    const markBraceErrors = (value) => {
+        const patterns = [
+            /\{(?!\{)\s*(personalized|function|let|definition)\b[^}]*\}\}/gi,
+            /\{\{\{\s*(personalized|function|let|definition)\b[\s\S]*?\}\}/gi,
+            /\{\{\s*(personalized|function|let|definition)\b[\s\S]*?\}\}\}/gi,
+            /\{\{\s*(personalized|function|let|definition)\b[^}\n]*\}(?!\})/gi,
+            /\{(?!\{)\s*(#|\/)\s*section_[^}]*\}\}/gi,
+            /\{\{\{\s*(#|\/)\s*section_[^}]*\}\}/gi,
+            /\{\{\s*(#|\/)\s*section_[^}\n]*\}(?!\})/gi,
+            /\{\{\s*(#|\/)\s*section_[^}]*\}\}\}/gi
+        ];
+        let output = value;
+        patterns.forEach((pattern) => {
+            output = output.replace(pattern, (match) => codeErrorStart + match + codeErrorEnd);
+        });
+        return output;
+    };
+
     // 4) GENERAR HTML FINAL (secciones + tesauros + LET + tags parciales rotos)
     let html = "";
 
@@ -2561,7 +2581,8 @@ function updateHighlight() {
         const seg = segments[i];
 
         // Escapamos HTML
-        let safe = escapeHtml(seg.text);
+        const rawWithBraceErrors = markBraceErrors(seg.text);
+        let safe = escapeHtml(rawWithBraceErrors);
 
         const wrapCodeError = (value) => '<span class="code-error-block">' + value + '</span>';
         const parseReferenceValue = (value) => {
@@ -2704,6 +2725,15 @@ function updateHighlight() {
                 /\{\{\s*\/\s*(?!section_)[^}]*\}\}/gi,
                 function (matchInvalidSection) {
                     return '<span class="section-error-block">' + matchInvalidSection + "</span>";
+                }
+            );
+        }
+
+        if (allowTesauros || allowLet || typeof highlightSections === "undefined" || highlightSections) {
+            safe = safe.replace(
+                new RegExp(codeErrorStart + "([\\s\\S]*?)" + codeErrorEnd, "g"),
+                function (match, content) {
+                    return wrapCodeError(content);
                 }
             );
         }
