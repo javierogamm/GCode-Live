@@ -1363,8 +1363,12 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
             `;
         };
 
-        const renderCombinedTable = (list) => {
+        const renderCombinedTable = (list, { highlight = false, sortByMarkdown = false } = {}) => {
             if (!list.length) return "<p style='margin:0; color:#64748b;'>No hay tesauros para mostrar.</p>";
+            const rows = [...list];
+            if (sortByMarkdown) {
+                rows.sort((a, b) => Number(!!b.enMarkdown) - Number(!!a.enMarkdown));
+            }
             return `
                 <div style="max-height:280px; overflow:auto; border:1px solid #e2e8f0; border-radius:8px;">
                     <table style="width:100%; border-collapse:collapse; font-size:12px;">
@@ -1379,8 +1383,8 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                             </tr>
                         </thead>
                         <tbody>
-                            ${list.map(item => `
-                                <tr>
+                            ${rows.map(item => `
+                                <tr style="background:${highlight ? (item.enMarkdown ? "#dcfce7" : "#f1f5f9") : "transparent"};">
                                     <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.ref)}</td>
                                     <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.nombre)}</td>
                                     <td style="padding:6px; border:1px solid #e2e8f0;">${this.escapeAttr(item.tipo)}</td>
@@ -1537,7 +1541,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                 <p style="margin:0; font-size:13px; color:#4b5563;">
                     Se muestra la lista completa de tesauros y se indica cuáles aparecen en el Markdown.
                 </p>
-                ${renderCombinedTable(state.combinedTesauros)}
+                ${renderCombinedTable(state.combinedTesauros, { highlight: true, sortByMarkdown: true })}
                 <div style="display:flex; gap:10px;">
                     <button id="tmMdCancel" style="
                         flex:1; background:#f1f5f9; border:1px solid #cbd5e1;
@@ -1557,7 +1561,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
 
             container.querySelector("#tmMdContinueSelectors").addEventListener("click", () => {
                 state.selectorsQueue = state.combinedTesauros
-                    .filter(item => item.tipo === "selector")
+                    .filter(item => item.tipo === "selector" && item.enMarkdown)
                     .map(item => ({
                         ref: item.ref,
                         nombre: item.nombre
