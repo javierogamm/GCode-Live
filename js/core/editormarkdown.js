@@ -1847,7 +1847,15 @@ const miniMapState = {
     container: null,
     base: null,
     content: null,
-    viewport: null
+    viewport: null,
+    scale: 1,
+    interactionsReady: false,
+    isDragging: false,
+    isViewportDragging: false,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+    viewportDragOffsetY: 0,
+    resizeObserver: null
 };
 
 function escapeRegex(str) {
@@ -1951,6 +1959,105 @@ function ensureMiniMap() {
     miniMapState.base = container.querySelector(".mini-map-base");
     miniMapState.content = container.querySelector(".mini-map-content");
     miniMapState.viewport = container.querySelector(".mini-map-viewport");
+    setupMiniMapInteractions();
+}
+
+function setupMiniMapInteractions() {
+    if (miniMapState.interactionsReady) return;
+    miniMapState.interactionsReady = true;
+
+    const container = miniMapState.container;
+    const viewport = miniMapState.viewport;
+
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+    const getViewportHeight = () => {
+        if (!viewport) return 0;
+        const rect = viewport.getBoundingClientRect();
+        return rect.height || 0;
+    };
+
+    const startContainerDrag = (event) => {
+        if (!miniMapState.enabled) return;
+        if (event.button !== 0) return;
+        if (event.target && event.target.closest(".mini-map-viewport")) return;
+        const rect = container.getBoundingClientRect();
+        const nearResizeHandle =
+            event.clientX >= rect.right - 18 && event.clientY >= rect.bottom - 18;
+        if (nearResizeHandle) return;
+        event.preventDefault();
+        miniMapState.isDragging = true;
+        miniMapState.dragOffsetX = event.clientX - rect.left;
+        miniMapState.dragOffsetY = event.clientY - rect.top;
+        container.classList.add("is-dragging");
+    };
+
+    const startViewportDrag = (event) => {
+        if (!miniMapState.enabled) return;
+        if (event.button !== 0) return;
+        event.preventDefault();
+        miniMapState.isViewportDragging = true;
+        const rect = viewport.getBoundingClientRect();
+        miniMapState.viewportDragOffsetY = event.clientY - rect.top;
+        viewport.classList.add("is-dragging");
+    };
+
+    const updateContainerPosition = (clientX, clientY) => {
+        const rect = container.getBoundingClientRect();
+        const nextLeft = clientX - miniMapState.dragOffsetX;
+        const nextTop = clientY - miniMapState.dragOffsetY;
+        container.style.left = nextLeft + "px";
+        container.style.top = nextTop + "px";
+        container.style.right = "auto";
+        container.style.bottom = "auto";
+    };
+
+    const updateScrollFromViewport = (clientY) => {
+        const rect = container.getBoundingClientRect();
+        const viewHeight = getViewportHeight();
+        const maxTop = Math.max(0, rect.height - viewHeight);
+        const nextTop = clamp(clientY - rect.top - miniMapState.viewportDragOffsetY, 0, maxTop);
+        const scale = miniMapState.scale || 1;
+        markdownText.scrollTop = nextTop / scale;
+    };
+
+    container.addEventListener("mousedown", startContainerDrag);
+    if (viewport) {
+        viewport.addEventListener("mousedown", startViewportDrag);
+    }
+
+    document.addEventListener("mousemove", (event) => {
+        if (miniMapState.isDragging) {
+            updateContainerPosition(event.clientX, event.clientY);
+        } else if (miniMapState.isViewportDragging) {
+            updateScrollFromViewport(event.clientY);
+        } else {
+            return;
+        }
+        updateMiniMap();
+    });
+
+    document.addEventListener("mouseup", () => {
+        if (miniMapState.isDragging) {
+            miniMapState.isDragging = false;
+            container.classList.remove("is-dragging");
+        }
+        if (miniMapState.isViewportDragging) {
+            miniMapState.isViewportDragging = false;
+            viewport.classList.remove("is-dragging");
+        }
+    });
+
+    if (typeof ResizeObserver !== "undefined") {
+        miniMapState.resizeObserver = new ResizeObserver(() => {
+            updateMiniMap();
+        });
+        miniMapState.resizeObserver.observe(container);
+    }
+
+    window.addEventListener("resize", () => {
+        updateMiniMap();
+    });
 }
 
 function updateMiniMap() {
@@ -1977,6 +2084,7 @@ function updateMiniMap() {
     const targetWidth = miniMapState.container.clientWidth || 1;
     const targetHeight = miniMapState.container.clientHeight || 1;
     const scale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+    miniMapState.scale = scale;
 
     miniMapState.content.style.width = sourceWidth + "px";
     miniMapState.content.style.height = sourceHeight + "px";

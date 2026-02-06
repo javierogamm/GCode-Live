@@ -238,10 +238,19 @@ body {
   display: none;
   z-index: 35;
   overflow: hidden;
+  resize: both;
+  min-width: 140px;
+  min-height: 220px;
+  cursor: grab;
+  user-select: none;
 }
 
 .mini-map.is-visible {
   display: block;
+}
+
+.mini-map.is-dragging {
+  cursor: grabbing;
 }
 
 .mini-map-base {
@@ -277,7 +286,12 @@ body {
   border: 1px solid rgba(59, 130, 246, 0.65);
   background: rgba(59, 130, 246, 0.08);
   border-radius: 6px;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.mini-map-viewport.is-dragging {
+  cursor: grabbing;
 }
 /* =============================
    TOOLBAR SUPERIOR

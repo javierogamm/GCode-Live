@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.39 - 2026-03-02
+- El minimapa ahora se puede arrastrar libremente por la pantalla y redimensionar desde su esquina inferior derecha.
+- El recuadro visible del minimapa permite arrastrarse para desplazar el editor principal en vertical.
+
 ## v1.3.38 - 2026-03-02
 - El importador desde Markdown ahora solo crea tesauros que coinciden entre el Markdown y el copypaste.
 
