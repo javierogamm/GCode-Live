@@ -13,6 +13,7 @@ const btnExportProyecto = document.getElementById("btnExportProyecto");
 const btnImportProyecto = document.getElementById("btnImportProyecto");
 const btnGuardarProyecto = document.getElementById("btnGuardarProyecto");
 const btnExportCsv = document.getElementById("btnExportCsv");
+const projectNameInput = document.getElementById("projectNameInput");
 
 function ensureLineNumbersContent() {
     if (!lineNumbers) return null;
@@ -134,31 +135,292 @@ function ensureFloatingActionRow() {
 // Exponer helper para otros módulos
 window.ensureFloatingActionRow = ensureFloatingActionRow;
 
-function applyProjectData(data) {
-    if (data && typeof data.markdown === "string") {
-        const ta = document.getElementById("markdownText");
-        if (ta) {
-            ta.value = data.markdown;
-            if (typeof window.updateHighlight === "function") {
-                updateHighlight();
-            }
-            updateLineNumbers();
+const projectState = {
+    name: "",
+    templates: [],
+    activeTemplateId: null
+};
+
+const templateManagerState = {
+    modal: null
+};
+
+const createTemplateId = () => `tpl_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+
+const getActiveTemplate = () => projectState.templates.find((tpl) => tpl.id === projectState.activeTemplateId) || null;
+
+const syncActiveTemplateMarkdown = () => {
+    const active = getActiveTemplate();
+    if (active && markdownText) {
+        active.markdown = markdownText.value || "";
+    }
+};
+
+const resetUndoStacks = (value) => {
+    UndoManager.undoStack = [];
+    UndoManager.redoStack = [];
+    UndoManager.lastValue = value || "";
+};
+
+const getUniqueTemplateName = (baseName) => {
+    const safeBase = (baseName || "").trim() || `Plantilla ${projectState.templates.length + 1}`;
+    if (!projectState.templates.some((tpl) => tpl.name === safeBase)) {
+        return safeBase;
+    }
+    let idx = 2;
+    let candidate = `${safeBase} (${idx})`;
+    while (projectState.templates.some((tpl) => tpl.name === candidate)) {
+        idx += 1;
+        candidate = `${safeBase} (${idx})`;
+    }
+    return candidate;
+};
+
+const setProjectName = (name) => {
+    projectState.name = (name || "").trim();
+    if (projectNameInput) {
+        projectNameInput.value = projectState.name;
+    }
+};
+
+const setTemplates = (templates = [], activeName = "") => {
+    projectState.templates = templates.map((tpl) => ({
+        id: tpl.id || createTemplateId(),
+        name: tpl.name || tpl.nombre || "Plantilla",
+        markdown: typeof tpl.markdown === "string" ? tpl.markdown : ""
+    }));
+    if (!projectState.templates.length) {
+        const fallback = {
+            id: createTemplateId(),
+            name: "Plantilla 1",
+            markdown: markdownText ? markdownText.value || "" : ""
+        };
+        projectState.templates = [fallback];
+    }
+    const active = projectState.templates.find((tpl) => tpl.name === activeName) || projectState.templates[0];
+    projectState.activeTemplateId = active.id;
+    if (markdownText) {
+        markdownText.value = active.markdown || "";
+        resetUndoStacks(markdownText.value);
+        if (typeof window.updateHighlight === "function") {
+            updateHighlight();
         }
+        updateLineNumbers();
+    }
+};
+
+const addTemplate = (name, markdown = "") => {
+    const finalName = getUniqueTemplateName(name);
+    const template = {
+        id: createTemplateId(),
+        name: finalName,
+        markdown
+    };
+    projectState.templates.push(template);
+    projectState.activeTemplateId = template.id;
+    if (markdownText) {
+        markdownText.value = template.markdown;
+        resetUndoStacks(markdownText.value);
+        updateHighlight();
+        updateLineNumbers();
+    }
+    return template;
+};
+
+const applyProjectData = (data) => {
+    if (!data || typeof data !== "object") return;
+    const tesauros = Array.isArray(data.tesauros) ? data.tesauros : [];
+    const proyecto = data.proyecto || {};
+    const plantillas = proyecto.plantillas || data.plantillas || data.templates || null;
+    const projectName = proyecto.nombre || data.nombreProyecto || data.projectName || "";
+
+    if (typeof data.markdown === "string" && !plantillas) {
+        const fallbackName = proyecto.plantilla || data.plantilla || "Plantilla 1";
+        setTemplates([
+            { name: fallbackName, markdown: data.markdown }
+        ], fallbackName);
+    } else if (Array.isArray(plantillas)) {
+        const mapped = plantillas.map((tpl, index) => ({
+            name: tpl.nombre || tpl.name || `Plantilla ${index + 1}`,
+            markdown: tpl.markdown || ""
+        }));
+        setTemplates(mapped, proyecto.plantillaActiva || data.plantillaActiva || "");
     }
 
-    if (data && Array.isArray(data.tesauros) && window.DataTesauro) {
-        DataTesauro.campos = data.tesauros;
+    if (projectName) {
+        setProjectName(projectName);
+    }
+
+    if (tesauros.length && window.DataTesauro) {
+        DataTesauro.campos = tesauros;
         if (typeof DataTesauro.renderList === "function") {
             DataTesauro.renderList();
         } else if (typeof DataTesauro.render === "function") {
             DataTesauro.render();
         }
     }
+};
+
+function ensureTemplateManagerModal() {
+    if (templateManagerState.modal) return templateManagerState.modal;
+
+    const modal = document.createElement("div");
+    modal.id = "templateManagerModal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-card template-manager-card">
+            <div class="modal-header">
+                <div>
+                    <h3>Plantillas del proyecto</h3>
+                    <p class="muted">Selecciona o crea plantillas para este proyecto.</p>
+                </div>
+                <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="modal-body template-manager-body">
+                <div id="templateManagerList" class="template-list"></div>
+                <div class="template-create-row">
+                    <input id="templateManagerNameInput" type="text" placeholder="Nombre de la nueva plantilla" />
+                    <button type="button" data-action="create-template">Añadir plantilla</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector(".modal-close");
+    const list = modal.querySelector("#templateManagerList");
+    const nameInput = modal.querySelector("#templateManagerNameInput");
+    const createBtn = modal.querySelector("[data-action='create-template']");
+
+    const render = () => {
+        if (!list) return;
+        list.innerHTML = "";
+        if (!projectState.templates.length) {
+            list.innerHTML = `<div class="muted">Aún no hay plantillas.</div>`;
+            return;
+        }
+        projectState.templates.forEach((tpl) => {
+            const row = document.createElement("div");
+            row.className = "template-item" + (tpl.id === projectState.activeTemplateId ? " active" : "");
+            const name = document.createElement("span");
+            name.textContent = tpl.name;
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = "Usar";
+            btn.addEventListener("click", () => {
+                syncActiveTemplateMarkdown();
+                projectState.activeTemplateId = tpl.id;
+                if (markdownText) {
+                    markdownText.value = tpl.markdown || "";
+                    resetUndoStacks(markdownText.value);
+                    updateHighlight();
+                    updateLineNumbers();
+                }
+                render();
+                modal.style.display = "none";
+            });
+            row.appendChild(name);
+            row.appendChild(btn);
+            list.appendChild(row);
+        });
+    };
+
+    const handleCreate = () => {
+        const value = nameInput ? nameInput.value.trim() : "";
+        if (!value) return;
+        syncActiveTemplateMarkdown();
+        const template = addTemplate(value, "");
+        if (nameInput) nameInput.value = "";
+        if (markdownText) {
+            markdownText.value = template.markdown;
+            resetUndoStacks(markdownText.value);
+            updateHighlight();
+            updateLineNumbers();
+        }
+        render();
+        modal.style.display = "none";
+    };
+
+    if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+            modal.style.display = "none";
+        });
+    }
+
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) modal.style.display = "none";
+    });
+
+    if (createBtn) {
+        createBtn.addEventListener("click", handleCreate);
+    }
+    if (nameInput) {
+        nameInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                handleCreate();
+            }
+        });
+    }
+
+    modal.renderList = render;
+    modal.focusCreateInput = () => {
+        if (nameInput) {
+            nameInput.focus();
+            nameInput.select();
+        }
+    };
+
+    templateManagerState.modal = modal;
+    return modal;
+}
+
+function ensureTemplateButtons() {
+    const row = ensureFloatingActionRow();
+    if (!row) return;
+    if (!document.getElementById("btnSelectTemplate")) {
+        const selectBtn = document.createElement("button");
+        selectBtn.id = "btnSelectTemplate";
+        selectBtn.className = "floating-action-btn template-action-btn";
+        selectBtn.textContent = "🧾 Seleccionar plantilla";
+        selectBtn.addEventListener("click", () => {
+            syncActiveTemplateMarkdown();
+            const modal = ensureTemplateManagerModal();
+            if (typeof modal.renderList === "function") modal.renderList();
+            modal.style.display = "flex";
+        });
+        row.appendChild(selectBtn);
+    }
+    if (!document.getElementById("btnAddTemplate")) {
+        const addBtn = document.createElement("button");
+        addBtn.id = "btnAddTemplate";
+        addBtn.className = "floating-action-btn template-action-btn";
+        addBtn.textContent = "➕ Añadir plantilla";
+        addBtn.addEventListener("click", () => {
+            syncActiveTemplateMarkdown();
+            const modal = ensureTemplateManagerModal();
+            if (typeof modal.renderList === "function") modal.renderList();
+            modal.style.display = "flex";
+            if (typeof modal.focusCreateInput === "function") {
+                modal.focusCreateInput();
+            }
+        });
+        row.appendChild(addBtn);
+    }
+}
+
+window.ensureTemplateButtons = ensureTemplateButtons;
+
+if (projectNameInput) {
+    projectNameInput.addEventListener("input", (event) => {
+        const value = event.target ? event.target.value : "";
+        setProjectName(value);
+    });
 }
 if (btnExportProyecto) {
     btnExportProyecto.addEventListener("click", () => {
-        const textarea = document.getElementById("markdownText");
-        const markdown = textarea ? textarea.value : "";
+        syncActiveTemplateMarkdown();
+        const projectName = projectState.name || (projectNameInput ? projectNameInput.value.trim() : "");
 
         // Coger lista completa de tesauros desde DataTesauro
         const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
@@ -166,7 +428,14 @@ if (btnExportProyecto) {
             : [];
 
         const proyecto = {
-            markdown: markdown,
+            proyecto: {
+                nombre: projectName,
+                plantillas: projectState.templates.map((tpl) => ({
+                    nombre: tpl.name,
+                    markdown: tpl.markdown
+                })),
+                plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
+            },
             tesauros: tesauros
         };
 
@@ -218,8 +487,6 @@ if (btnImportProyecto) {
 
 const saveProjectState = {
     modal: null,
-    subfunciones: [],
-    selectedSubfuncion: "",
     projects: []
 };
 
@@ -233,26 +500,25 @@ function ensureSaveProjectModal() {
         <div class="modal-card save-project-modal-card">
             <div class="modal-header">
                 <div>
-                    <h3>Guardar JSON en base de datos</h3>
-                    <p class="muted">Organiza los flujos en carpetas por subfunción.</p>
+                    <h3>Guardar proyecto en base de datos</h3>
+                    <p class="muted">Cada plantilla se guarda como una fila del proyecto.</p>
                 </div>
                 <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
             </div>
             <div class="modal-body save-project-body">
                 <div class="save-project-sidebar">
-                    <h4>Subfunciones</h4>
-                    <button type="button" class="save-project-add-btn" data-action="add-subfuncion">Crear subfunción</button>
-                    <div class="save-project-folder-list" id="saveProjectFolderList"></div>
+                    <h4>Plantillas guardadas</h4>
+                    <div class="save-project-folder-list" id="saveProjectTemplateList"></div>
                 </div>
                 <div class="save-project-main">
                     <div class="save-project-input-row">
-                        <input id="saveProjectSubfuncionInput" type="text" placeholder="Subfunción seleccionada" />
-                        <input id="saveProjectNameInput" type="text" placeholder="Nombre del flujo" />
+                        <input id="saveProjectProjectInput" type="text" placeholder="Nombre del proyecto" />
+                        <input id="saveProjectTemplateInput" type="text" placeholder="Nombre de la plantilla" />
                     </div>
                     <div class="save-project-list" id="saveProjectList"></div>
                     <div class="save-project-status" id="saveProjectStatus"></div>
                     <div class="save-project-footer">
-                        <button type="button" class="save-project-save-btn" data-action="guardar">Guardar</button>
+                        <button type="button" class="save-project-save-btn" data-action="guardar">Guardar plantilla</button>
                     </div>
                 </div>
             </div>
@@ -263,11 +529,11 @@ function ensureSaveProjectModal() {
 
     const closeBtn = modal.querySelector(".modal-close");
     const statusEl = modal.querySelector("#saveProjectStatus");
-    const folderList = modal.querySelector("#saveProjectFolderList");
-    const subfuncionInput = modal.querySelector("#saveProjectSubfuncionInput");
-    const nameInput = modal.querySelector("#saveProjectNameInput");
+    const folderList = modal.querySelector("#saveProjectTemplateList");
+    const projectInput = modal.querySelector("#saveProjectProjectInput");
+    const templateInput = modal.querySelector("#saveProjectTemplateInput");
     const saveBtn = modal.querySelector("[data-action='guardar']");
-    const addBtn = modal.querySelector("[data-action='add-subfuncion']");
+    const nameInput = templateInput;
 
     const setStatus = (msg, isError = true) => {
         if (!statusEl) return;
@@ -275,66 +541,87 @@ function ensureSaveProjectModal() {
         statusEl.style.color = isError ? "#b91c1c" : "#15803d";
     };
 
-    const renderSubfunciones = () => {
+    const renderDbTemplates = () => {
         if (!folderList) return;
         folderList.innerHTML = "";
-        if (!saveProjectState.subfunciones.length) {
-            folderList.innerHTML = `<div class="muted">Sin subfunciones aún.</div>`;
+        if (!saveProjectState.projects.length) {
+            folderList.innerHTML = `<div class="muted">Sin plantillas guardadas.</div>`;
             return;
         }
-        saveProjectState.subfunciones.forEach((sub) => {
+        saveProjectState.projects.forEach((project) => {
             const item = document.createElement("button");
             item.type = "button";
-            item.className = "save-project-folder-item" + (sub === saveProjectState.selectedSubfuncion ? " active" : "");
-            item.innerHTML = `📁 ${sub}`;
-            item.addEventListener("click", () => {
-                saveProjectState.selectedSubfuncion = sub;
-                if (subfuncionInput) subfuncionInput.value = sub;
-                renderSubfunciones();
-                loadProjects(sub);
+            item.className = "save-project-folder-item";
+            const label = project.subfuncion || "Plantilla";
+            item.innerHTML = `📄 ${label}`;
+            item.addEventListener("click", async () => {
+                syncActiveTemplateMarkdown();
+                if (!templateInput) return;
+                templateInput.value = label;
+                if (project.id) {
+                    try {
+                        setStatus("Cargando plantilla...", false);
+                        const response = await fetch(`/api/project?id=${encodeURIComponent(project.id)}`);
+                        if (!response.ok) {
+                            throw new Error("No se pudo cargar la plantilla.");
+                        }
+                        const payload = await response.json();
+                        if (payload && payload.procedimiento) {
+                            const normalized = payload.procedimiento;
+                            const markdown = typeof normalized.markdown === "string" ? normalized.markdown : "";
+                            const existing = projectState.templates.find((tpl) => tpl.name === label);
+                            if (existing) {
+                                existing.markdown = markdown;
+                                projectState.activeTemplateId = existing.id;
+                            } else {
+                                addTemplate(label, markdown);
+                            }
+                            if (markdownText) {
+                                markdownText.value = markdown;
+                                resetUndoStacks(markdownText.value);
+                                updateHighlight();
+                                updateLineNumbers();
+                            }
+                            setStatus("Plantilla cargada en el editor.", false);
+                        } else {
+                            setStatus("No se encontró contenido en la plantilla seleccionada.");
+                        }
+                    } catch (error) {
+                        console.error(error);
+                        setStatus("No se pudo cargar la plantilla.");
+                    }
+                }
             });
             folderList.appendChild(item);
         });
     };
 
-    const renderProjects = () => {
+    const renderLocalTemplates = () => {
         const list = modal.querySelector("#saveProjectList");
         if (!list) return;
         list.innerHTML = "";
-        if (!saveProjectState.projects.length) {
-            list.innerHTML = `<div class="muted">No hay flujos guardados en esta subfunción.</div>`;
+        if (!projectState.templates.length) {
+            list.innerHTML = `<div class="muted">No hay plantillas locales aún.</div>`;
             return;
         }
-        saveProjectState.projects.forEach((project) => {
+        projectState.templates.forEach((tpl) => {
             const row = document.createElement("div");
             row.className = "save-project-item";
             const name = document.createElement("span");
-            name.textContent = project.nombre || "Sin nombre";
+            name.textContent = tpl.name || "Sin nombre";
             const button = document.createElement("button");
             button.type = "button";
             button.className = "save-project-use-btn";
-            button.textContent = "Usar nombre";
+            button.textContent = "Usar plantilla";
             button.addEventListener("click", async () => {
-                if (!nameInput) return;
-                nameInput.value = project.nombre || "";
-                if (project.id) {
-                    try {
-                        setStatus("Cargando flujo...", false);
-                        const response = await fetch(`/api/project?id=${encodeURIComponent(project.id)}`);
-                        if (!response.ok) {
-                            throw new Error("No se pudo cargar el flujo.");
-                        }
-                        const payload = await response.json();
-                        if (payload && payload.procedimiento) {
-                            applyProjectData(payload.procedimiento);
-                            setStatus("Flujo cargado en el editor.", false);
-                        } else {
-                            setStatus("No se encontró contenido en el flujo seleccionado.");
-                        }
-                    } catch (error) {
-                        console.error(error);
-                        setStatus("No se pudo cargar el flujo.");
-                    }
+                syncActiveTemplateMarkdown();
+                if (templateInput) templateInput.value = tpl.name || "";
+                projectState.activeTemplateId = tpl.id;
+                if (markdownText) {
+                    markdownText.value = tpl.markdown || "";
+                    resetUndoStacks(markdownText.value);
+                    updateHighlight();
+                    updateLineNumbers();
                 }
             });
             row.appendChild(name);
@@ -343,42 +630,25 @@ function ensureSaveProjectModal() {
         });
     };
 
-    const loadSubfunciones = async () => {
-        try {
-            setStatus("Cargando subfunciones...", false);
-            const response = await fetch("/api/subfunciones");
-            if (!response.ok) {
-                throw new Error("Error al cargar subfunciones.");
-            }
-            const data = await response.json();
-            saveProjectState.subfunciones = Array.isArray(data) ? data : [];
-            renderSubfunciones();
-            setStatus("");
-        } catch (error) {
-            console.error(error);
-            setStatus("No se pudieron cargar subfunciones.");
-        }
-    };
-
-    const loadProjects = async (subfuncion) => {
-        if (!subfuncion) {
+    const loadTemplatesFromDb = async (projectName) => {
+        if (!projectName) {
             saveProjectState.projects = [];
-            renderProjects();
+            renderDbTemplates();
             return;
         }
         try {
-            setStatus("Cargando flujos...", false);
-            const response = await fetch(`/api/projects?subfuncion=${encodeURIComponent(subfuncion)}`);
+            setStatus("Cargando plantillas...", false);
+            const response = await fetch(`/api/projects?nombre=${encodeURIComponent(projectName)}`);
             if (!response.ok) {
-                throw new Error("Error al cargar flujos.");
+                throw new Error("Error al cargar plantillas.");
             }
             const data = await response.json();
             saveProjectState.projects = Array.isArray(data) ? data : [];
-            renderProjects();
+            renderDbTemplates();
             setStatus("");
         } catch (error) {
             console.error(error);
-            setStatus("No se pudieron cargar los flujos.");
+            setStatus("No se pudieron cargar las plantillas.");
         }
     };
 
@@ -392,66 +662,64 @@ function ensureSaveProjectModal() {
         if (e.target === modal) modal.style.display = "none";
     });
 
-    if (addBtn) {
-        addBtn.addEventListener("click", () => {
-            if (!subfuncionInput) return;
-            const value = subfuncionInput.value.trim();
-            if (!value) {
-                setStatus("Escribe un nombre de subfunción para crearla.");
-                return;
-            }
-            if (!saveProjectState.subfunciones.includes(value)) {
-                saveProjectState.subfunciones = [value, ...saveProjectState.subfunciones];
-            }
-            saveProjectState.selectedSubfuncion = value;
-            renderSubfunciones();
-            loadProjects(value);
-            setStatus("");
-        });
-    }
-
     if (saveBtn) {
         saveBtn.addEventListener("click", async () => {
-            const nombre = nameInput ? nameInput.value.trim() : "";
-            const subfuncion = subfuncionInput ? subfuncionInput.value.trim() : "";
-            if (!subfuncion) {
-                setStatus("Selecciona o crea una subfunción.");
+            const proyectoNombre = projectInput ? projectInput.value.trim() : "";
+            const plantillaNombre = nameInput ? nameInput.value.trim() : "";
+            if (!proyectoNombre) {
+                setStatus("Indica el nombre del proyecto.");
                 return;
             }
-            if (!nombre) {
-                setStatus("Indica el nombre del flujo.");
+            if (!plantillaNombre) {
+                setStatus("Indica el nombre de la plantilla.");
                 return;
             }
+            const active = getActiveTemplate();
+            if (active && projectState.templates.some((tpl) => tpl.name === plantillaNombre && tpl.id !== active.id)) {
+                setStatus("Ya existe una plantilla con ese nombre.");
+                return;
+            }
+            if (active && active.name !== plantillaNombre) {
+                active.name = plantillaNombre;
+            }
+            setProjectName(proyectoNombre);
             const markdown = markdownText ? markdownText.value : "";
             const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
                 ? DataTesauro.campos
                 : [];
             const procedimiento = {
+                proyecto: {
+                    nombre: proyectoNombre,
+                    plantilla: plantillaNombre
+                },
                 markdown,
                 tesauros
             };
             try {
-                setStatus("Guardando flujo...", false);
+                setStatus("Guardando plantilla...", false);
                 const response = await fetch("/api/projects", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({ nombre, subfuncion, procedimiento })
+                    body: JSON.stringify({ nombre: proyectoNombre, subfuncion: plantillaNombre, procedimiento })
                 });
                 if (!response.ok) {
-                    throw new Error("Error al guardar el flujo.");
+                    throw new Error("Error al guardar la plantilla.");
                 }
-                setStatus("Flujo guardado correctamente.", false);
-                saveProjectState.selectedSubfuncion = subfuncion;
-                if (!saveProjectState.subfunciones.includes(subfuncion)) {
-                    saveProjectState.subfunciones = [subfuncion, ...saveProjectState.subfunciones];
+                setStatus("Plantilla guardada correctamente.", false);
+                const existing = projectState.templates.find((tpl) => tpl.name === plantillaNombre);
+                if (existing) {
+                    existing.markdown = markdown;
+                    projectState.activeTemplateId = existing.id;
+                } else {
+                    addTemplate(plantillaNombre, markdown);
                 }
-                renderSubfunciones();
-                loadProjects(subfuncion);
+                renderLocalTemplates();
+                loadTemplatesFromDb(proyectoNombre);
             } catch (error) {
                 console.error(error);
-                setStatus("No se pudo guardar el flujo.");
+                setStatus("No se pudo guardar la plantilla.");
             }
         });
     }
@@ -463,25 +731,32 @@ function ensureSaveProjectModal() {
     });
 
     saveProjectState.modal = modal;
-    modal.loadSubfunciones = loadSubfunciones;
-    modal.loadProjects = loadProjects;
-    modal.renderSubfunciones = renderSubfunciones;
+    modal.loadTemplatesFromDb = loadTemplatesFromDb;
+    modal.renderLocalTemplates = renderLocalTemplates;
+    modal.renderDbTemplates = renderDbTemplates;
     return modal;
 }
 
 if (btnGuardarProyecto) {
     btnGuardarProyecto.addEventListener("click", () => {
+        syncActiveTemplateMarkdown();
         const modal = ensureSaveProjectModal();
-        const subfuncionInput = modal.querySelector("#saveProjectSubfuncionInput");
-        const nameInput = modal.querySelector("#saveProjectNameInput");
-        if (subfuncionInput) subfuncionInput.value = saveProjectState.selectedSubfuncion || "";
-        if (nameInput) nameInput.value = "";
-        modal.style.display = "flex";
-        if (typeof modal.loadSubfunciones === "function") {
-            modal.loadSubfunciones();
+        const projectInput = modal.querySelector("#saveProjectProjectInput");
+        const templateInput = modal.querySelector("#saveProjectTemplateInput");
+        if (projectInput) {
+            projectInput.value = projectState.name || "";
         }
-        if (saveProjectState.selectedSubfuncion && typeof modal.loadProjects === "function") {
-            modal.loadProjects(saveProjectState.selectedSubfuncion);
+        if (templateInput) {
+            const active = getActiveTemplate();
+            templateInput.value = active ? active.name : "";
+        }
+        modal.style.display = "flex";
+        if (typeof modal.renderLocalTemplates === "function") {
+            modal.renderLocalTemplates();
+        }
+        const projectName = projectState.name || (projectInput ? projectInput.value.trim() : "");
+        if (typeof modal.loadTemplatesFromDb === "function") {
+            modal.loadTemplatesFromDb(projectName);
         }
     });
 }
@@ -533,6 +808,16 @@ const UndoManager = {
 
 // Estado inicial
 UndoManager.lastValue = markdownText.value || "";
+
+setTemplates([
+    {
+        name: "Plantilla 1",
+        markdown: markdownText ? markdownText.value || "" : ""
+    }
+]);
+if (projectNameInput && projectNameInput.value) {
+    setProjectName(projectNameInput.value);
+}
 
 // Helper global (lo usan también otros scripts si quieren)
 function pushUndoState() {
@@ -2322,6 +2607,7 @@ if (markdownText.parentElement) {
 /* 🔹 Cualquier cambio en el textarea (teclado, Ctrl+V texto plano, borrar...) */
 markdownText.addEventListener("input", () => {
     UndoManager.push(markdownText.value);
+    syncActiveTemplateMarkdown();
     updateHighlight();
     updateLineNumbers();
 });

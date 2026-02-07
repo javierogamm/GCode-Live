@@ -3,8 +3,11 @@ const { supabaseFetch } = require("./_supabase");
 module.exports = async (req, res) => {
   if (req.method === "GET") {
     try {
-      const { subfuncion } = req.query || {};
+      const { subfuncion, nombre } = req.query || {};
       const filters = ["select=id,created_at,nombre,subfuncion", "order=created_at.desc"];
+      if (nombre) {
+        filters.push(`nombre=eq.${encodeURIComponent(nombre)}`);
+      }
       if (subfuncion) {
         filters.push(`subfuncion=eq.${encodeURIComponent(subfuncion)}`);
       }
