@@ -177,7 +177,7 @@ const getUniqueTemplateName = (baseName) => {
 };
 
 const setProjectName = (name) => {
-    projectState.name = (name || "").trim();
+    projectState.name = name || "";
     if (projectNameInput) {
         projectNameInput.value = projectState.name;
     }
@@ -417,6 +417,16 @@ function ensureTemplateButtons() {
 }
 
 window.ensureTemplateButtons = ensureTemplateButtons;
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+        if (typeof window.ensureTemplateButtons === "function") {
+            window.ensureTemplateButtons();
+        }
+    });
+} else if (typeof window.ensureTemplateButtons === "function") {
+    window.ensureTemplateButtons();
+}
 
 if (projectNameInput) {
     projectNameInput.addEventListener("input", (event) => {
@@ -2695,7 +2705,7 @@ function updateHighlight() {
 
     const hasInvalidConditionValues = (expr) => {
         const comparisonRegex =
-            /\b(?:personalized|variable)\.[A-Za-z0-9_]+\s*(==|!=|>=|<=|>|<)\s*([^\s()]+|"[^"]*")/gi;
+            /\b(?:personalized|variable)\.[A-Za-z0-9_]+\s*(==|!=|>=|<=|>|<)\s*("[^"]*"|[^\s()]+)/gi;
         let match;
         while ((match = comparisonRegex.exec(expr)) !== null) {
             const rawValue = match[2];

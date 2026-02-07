@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.45 - 2026-03-04
+- El nombre del proyecto vuelve a aceptar espacios en la edición.
+- Se reforzó la inicialización de los botones de plantillas para asegurar su funcionamiento.
+- Se corrigió la validación de sections para aceptar valores con espacios entre comillas.
+
 ## v1.3.44 - 2026-03-04
 - El guardado en base de datos ahora consolida un único registro por proyecto con JSON completo, usuario, subfunción y nombres de plantillas concatenados.
 - El modal de guardado muestra carpetas existentes (subfunciones) y permite seleccionar o crear nuevas al guardar el proyecto.
