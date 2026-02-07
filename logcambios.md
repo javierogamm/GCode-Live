@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.44 - 2026-03-04
+- El guardado en base de datos ahora persiste una sola fila por proyecto con el JSON completo, plantillas concatenadas, usuario y carpeta (subfunción).
+- El modal de guardado muestra las subfunciones existentes como carpetas y permite definir una nueva carpeta al guardar.
+- Se ajustaron los endpoints de proyectos para trabajar con el nuevo schema y actualizar filas existentes por proyecto.
+
 ## v1.3.43 - 2026-03-03
 - Se añadió un campo editable para el nombre del proyecto en el área principal del editor.
 - Se incorporaron botones y modal para seleccionar o crear plantillas dentro del proyecto.
