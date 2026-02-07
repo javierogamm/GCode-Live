@@ -43,6 +43,138 @@ function updateLineNumbers() {
     content.style.height = markdownText.scrollHeight + "px";
 }
 
+const lineSelectionMeasure = {
+    element: null,
+    lineHeight: 0
+};
+
+function ensureLineSelectionMeasure() {
+    if (!markdownText) return null;
+    if (!lineSelectionMeasure.element) {
+        const mirror = document.createElement("div");
+        mirror.setAttribute("aria-hidden", "true");
+        mirror.style.position = "absolute";
+        mirror.style.visibility = "hidden";
+        mirror.style.pointerEvents = "none";
+        mirror.style.whiteSpace = "pre-wrap";
+        mirror.style.wordWrap = "break-word";
+        mirror.style.overflowWrap = "break-word";
+        mirror.style.left = "-9999px";
+        mirror.style.top = "0";
+        mirror.style.border = "0";
+        mirror.style.padding = "12px 12px 12px 56px";
+        document.body.appendChild(mirror);
+        lineSelectionMeasure.element = mirror;
+    }
+    const computed = window.getComputedStyle(markdownText);
+    lineSelectionMeasure.element.style.width = computed.width;
+    lineSelectionMeasure.element.style.fontFamily = computed.fontFamily;
+    lineSelectionMeasure.element.style.fontSize = computed.fontSize;
+    lineSelectionMeasure.element.style.lineHeight = computed.lineHeight;
+    lineSelectionMeasure.element.style.letterSpacing = computed.letterSpacing;
+    lineSelectionMeasure.element.style.boxSizing = computed.boxSizing;
+    let lineHeight = parseFloat(computed.lineHeight);
+    if (!Number.isFinite(lineHeight) || lineHeight <= 0) {
+        lineHeight = 20;
+    }
+    lineSelectionMeasure.lineHeight = lineHeight;
+    return lineSelectionMeasure;
+}
+
+function getVisualLineCountForText(text) {
+    const measure = ensureLineSelectionMeasure();
+    if (!measure || !measure.element) return 1;
+    measure.element.textContent = text.length ? text : " ";
+    return Math.max(1, Math.ceil(measure.element.scrollHeight / measure.lineHeight));
+}
+
+function getIndexForVisualLine(text, targetLine) {
+    if (!text) return 0;
+    const totalLines = getVisualLineCountForText(text);
+    const safeLine = Math.max(1, Math.min(targetLine, totalLines));
+    let low = 0;
+    let high = text.length;
+    while (low < high) {
+        const mid = Math.floor((low + high) / 2);
+        const lineCount = getVisualLineCountForText(text.slice(0, mid));
+        if (lineCount < safeLine) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    return low;
+}
+
+const lineSelectionState = {
+    isSelecting: false,
+    startLine: null,
+    lastLine: null
+};
+
+function getLineNumberFromElement(element) {
+    if (!element) return null;
+    const lineEl = element.closest(".line-number");
+    if (!lineEl) return null;
+    const value = parseInt(lineEl.textContent, 10);
+    return Number.isFinite(value) ? value : null;
+}
+
+function getLineRangeSelection(text, startLine, endLine) {
+    if (!text) return { startIndex: 0, endIndex: 0 };
+    const totalLines = getVisualLineCountForText(text);
+    const safeStart = Math.max(1, Math.min(startLine, totalLines));
+    const safeEnd = Math.max(1, Math.min(endLine, totalLines));
+    const minLine = Math.min(safeStart, safeEnd);
+    const maxLine = Math.max(safeStart, safeEnd);
+    const startIndex = getIndexForVisualLine(text, minLine);
+    let endIndex = text.length;
+    if (maxLine < totalLines) {
+        endIndex = getIndexForVisualLine(text, maxLine + 1);
+    }
+    return { startIndex, endIndex };
+}
+
+function applyLineSelection(startLine, endLine) {
+    if (!markdownText) return;
+    const text = markdownText.value || "";
+    const { startIndex, endIndex } = getLineRangeSelection(text, startLine, endLine);
+    markdownText.focus();
+    markdownText.setSelectionRange(startIndex, endIndex);
+}
+
+function handleLineNumberMouseDown(event) {
+    if (event.button !== 0) return;
+    const line = getLineNumberFromElement(event.target);
+    if (!line) return;
+    event.preventDefault();
+    lineSelectionState.isSelecting = true;
+    lineSelectionState.startLine = line;
+    lineSelectionState.lastLine = line;
+    applyLineSelection(line, line);
+}
+
+function handleLineNumberMouseMove(event) {
+    if (!lineSelectionState.isSelecting) return;
+    const element = document.elementFromPoint(event.clientX, event.clientY);
+    const line = getLineNumberFromElement(element);
+    if (!line || line === lineSelectionState.lastLine) return;
+    lineSelectionState.lastLine = line;
+    applyLineSelection(lineSelectionState.startLine, line);
+}
+
+function handleLineNumberMouseUp() {
+    lineSelectionState.isSelecting = false;
+    lineSelectionState.startLine = null;
+    lineSelectionState.lastLine = null;
+}
+
+if (lineNumbers && markdownText) {
+    lineNumbers.addEventListener("mousedown", handleLineNumberMouseDown);
+    document.addEventListener("mousemove", handleLineNumberMouseMove);
+    document.addEventListener("mouseup", handleLineNumberMouseUp);
+}
+
 // Barra de acciones flotantes (Sections, LET, Definition, Tesauro)
 function ensureFloatingActionRow() {
     const toolbar = document.getElementById("toolbar") || document.querySelector(".toolbar");

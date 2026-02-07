@@ -1,5 +1,13 @@
 # Log de cambios
 
+## v1.3.43 - 2026-03-02
+- Se corrigió el mapeo de selección por números de línea para respetar el ajuste visual del texto al hacer clic y arrastrar.
+- La selección ahora se alinea con la línea visible indicada en el gutter.
+
+## v1.3.42 - 2026-03-02
+- Los números de línea ahora permiten seleccionar la línea completa al hacer clic y extender la selección al arrastrar.
+- El gutter de números de línea acepta interacción directa para facilitar la selección por rangos.
+
 ## v1.3.41 - 2026-02-06
 - El minimapa se activa por defecto y sincroniza su estado con el botón de miniatura.
 - El resaltado de errores ahora marca en rojo tesauros, LET y definitions mal configurados, además de detectar etiquetas de sección mal escritas.

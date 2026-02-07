@@ -126,7 +126,7 @@ body {
   border-right: 1px solid #e2e8f0;
   overflow: hidden;
   user-select: none;
-  pointer-events: none;
+  pointer-events: auto;
   z-index: 3;
 }
 
@@ -137,6 +137,7 @@ body {
 
 .line-number {
   height: 1.4em;
+  cursor: pointer;
 }
 
 /* Editor markdown único */
