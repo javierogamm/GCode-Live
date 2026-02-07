@@ -1367,6 +1367,128 @@ body {
 }
 
 /* =============================
+   MODAL CARGAR PROYECTO
+   ============================= */
+
+.load-project-modal-card {
+  width: min(980px, 100%);
+}
+
+.load-project-body {
+  display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.load-project-sidebar {
+  border-right: 1px solid #e5e7eb;
+  padding-right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.load-project-sidebar h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.load-project-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.load-project-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.load-project-folder-item.active {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e3a8a;
+}
+
+.load-project-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.load-project-list {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px;
+  background: #ffffff;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.load-project-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.load-project-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.load-project-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.load-project-details {
+  font-size: 12px;
+  color: #475569;
+}
+
+.load-project-action {
+  align-self: center;
+  border: none;
+  background: #16a34a;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.load-project-action:hover {
+  background: #15803d;
+}
+
+.load-project-status {
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+/* =============================
    MODAL PLANTILLAS
    ============================= */
 

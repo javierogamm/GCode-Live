@@ -12,6 +12,7 @@ const btnDescargar = document.getElementById("btnDescargar");
 const btnExportProyecto = document.getElementById("btnExportProyecto");
 const btnImportProyecto = document.getElementById("btnImportProyecto");
 const btnGuardarProyecto = document.getElementById("btnGuardarProyecto");
+const btnCargarProyecto = document.getElementById("btnCargarProyecto");
 const btnExportCsv = document.getElementById("btnExportCsv");
 const projectNameInput = document.getElementById("projectNameInput");
 
@@ -727,6 +728,222 @@ if (btnGuardarProyecto) {
         if (typeof modal.renderLocalTemplates === "function") {
             modal.renderLocalTemplates();
         }
+        if (typeof modal.loadSubfunciones === "function") {
+            modal.loadSubfunciones();
+        }
+    });
+}
+
+const loadProjectState = {
+    modal: null,
+    subfunciones: [],
+    activeSubfuncion: "",
+    projects: []
+};
+
+function ensureLoadProjectModal() {
+    if (loadProjectState.modal) return loadProjectState.modal;
+
+    const modal = document.createElement("div");
+    modal.id = "loadProjectModal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-card load-project-modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3>Cargar proyecto desde base de datos</h3>
+                    <p class="muted">Selecciona una carpeta y carga el proyecto completo.</p>
+                </div>
+                <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="modal-body load-project-body">
+                <div class="load-project-sidebar">
+                    <h4>Carpetas guardadas</h4>
+                    <div class="load-project-folder-list" id="loadProjectFolderList"></div>
+                </div>
+                <div class="load-project-main">
+                    <div class="load-project-list" id="loadProjectList"></div>
+                    <div class="load-project-status" id="loadProjectStatus"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector(".modal-close");
+    const statusEl = modal.querySelector("#loadProjectStatus");
+    const folderList = modal.querySelector("#loadProjectFolderList");
+    const projectList = modal.querySelector("#loadProjectList");
+
+    const setStatus = (msg, isError = true) => {
+        if (!statusEl) return;
+        statusEl.textContent = msg || "";
+        statusEl.style.color = isError ? "#b91c1c" : "#15803d";
+    };
+
+    const formatDate = (raw) => {
+        if (!raw) return "Sin fecha";
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return "Sin fecha";
+        return parsed.toLocaleString("es-ES", {
+            dateStyle: "medium",
+            timeStyle: "short"
+        });
+    };
+
+    const renderSubfunciones = () => {
+        if (!folderList) return;
+        folderList.innerHTML = "";
+        if (!loadProjectState.subfunciones.length) {
+            folderList.innerHTML = `<div class="muted">Sin carpetas guardadas.</div>`;
+            return;
+        }
+        loadProjectState.subfunciones.forEach((subfuncion) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "load-project-folder-item";
+            const label = subfuncion || "Sin carpeta";
+            button.textContent = `📁 ${label}`;
+            button.addEventListener("click", () => {
+                loadProjectState.activeSubfuncion = label === "Sin carpeta" ? "" : label;
+                renderSubfunciones();
+                if (typeof modal.loadProjects === "function") {
+                    modal.loadProjects(loadProjectState.activeSubfuncion);
+                }
+            });
+            if (loadProjectState.activeSubfuncion === (label === "Sin carpeta" ? "" : label)) {
+                button.classList.add("active");
+            }
+            folderList.appendChild(button);
+        });
+    };
+
+    const renderProjects = () => {
+        if (!projectList) return;
+        projectList.innerHTML = "";
+        if (!loadProjectState.projects.length) {
+            projectList.innerHTML = `<div class="muted">No hay proyectos para esta carpeta.</div>`;
+            return;
+        }
+        loadProjectState.projects.forEach((project) => {
+            const row = document.createElement("div");
+            row.className = "load-project-item";
+            const meta = document.createElement("div");
+            meta.className = "load-project-meta";
+            const title = document.createElement("div");
+            title.className = "load-project-title";
+            title.textContent = project.proyecto || "Proyecto sin nombre";
+            const details = document.createElement("div");
+            details.className = "load-project-details";
+            const author = project.user || "Sin autor";
+            const dateLabel = formatDate(project.created_at);
+            details.textContent = `Autor: ${author} · Guardado: ${dateLabel}`;
+            meta.appendChild(title);
+            meta.appendChild(details);
+            const action = document.createElement("button");
+            action.type = "button";
+            action.className = "load-project-action";
+            action.textContent = "Cargar";
+            action.addEventListener("click", async () => {
+                try {
+                    setStatus("Cargando proyecto...", false);
+                    const response = await fetch(`/api/project?id=${encodeURIComponent(project.id)}`);
+                    if (!response.ok) {
+                        throw new Error("Error al cargar el proyecto.");
+                    }
+                    const data = await response.json();
+                    let payload = data?.json;
+                    if (typeof payload === "string") {
+                        payload = JSON.parse(payload);
+                    }
+                    if (!payload || typeof payload !== "object") {
+                        throw new Error("Proyecto inválido.");
+                    }
+                    applyProjectData(payload);
+                    setStatus("Proyecto cargado correctamente.", false);
+                    modal.style.display = "none";
+                } catch (error) {
+                    console.error(error);
+                    setStatus("No se pudo cargar el proyecto.");
+                }
+            });
+            row.appendChild(meta);
+            row.appendChild(action);
+            projectList.appendChild(row);
+        });
+    };
+
+    const loadSubfunciones = async () => {
+        try {
+            setStatus("Cargando subfunciones...", false);
+            const response = await fetch("/api/subfunciones");
+            if (!response.ok) {
+                throw new Error("Error al cargar carpetas.");
+            }
+            const data = await response.json();
+            loadProjectState.subfunciones = Array.isArray(data) ? data : [];
+            if (!loadProjectState.activeSubfuncion && loadProjectState.subfunciones.length) {
+                loadProjectState.activeSubfuncion = loadProjectState.subfunciones[0] || "";
+            }
+            renderSubfunciones();
+            if (typeof modal.loadProjects === "function") {
+                modal.loadProjects(loadProjectState.activeSubfuncion);
+            }
+            setStatus("");
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudieron cargar las subfunciones.");
+        }
+    };
+
+    const loadProjects = async (subfuncion = "") => {
+        try {
+            setStatus("Cargando proyectos...", false);
+            const query = subfuncion ? `?subfuncion=${encodeURIComponent(subfuncion)}` : "";
+            const response = await fetch(`/api/projects${query}`);
+            if (!response.ok) {
+                throw new Error("Error al cargar proyectos.");
+            }
+            const data = await response.json();
+            loadProjectState.projects = Array.isArray(data) ? data : [];
+            renderProjects();
+            setStatus("");
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudieron cargar los proyectos.");
+        }
+    };
+
+    if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+            modal.style.display = "none";
+        });
+    }
+
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) modal.style.display = "none";
+    });
+
+    modal.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            modal.style.display = "none";
+        }
+    });
+
+    loadProjectState.modal = modal;
+    modal.loadSubfunciones = loadSubfunciones;
+    modal.loadProjects = loadProjects;
+    modal.renderSubfunciones = renderSubfunciones;
+    modal.renderProjects = renderProjects;
+    return modal;
+}
+
+if (btnCargarProyecto) {
+    btnCargarProyecto.addEventListener("click", () => {
+        syncActiveTemplateMarkdown();
+        const modal = ensureLoadProjectModal();
+        modal.style.display = "flex";
         if (typeof modal.loadSubfunciones === "function") {
             modal.loadSubfunciones();
         }
