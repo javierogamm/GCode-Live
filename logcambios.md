@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.43 - 2026-03-03
+- Se añadió un campo editable para el nombre del proyecto en el área principal del editor.
+- Se incorporaron botones y modal para seleccionar o crear plantillas dentro del proyecto.
+- La exportación e importación JSON ahora incluye nombre del proyecto y múltiples plantillas compartiendo tesauros.
+- El guardado en base de datos registra cada plantilla como fila asociada al nombre del proyecto.
+
 ## v1.3.42 - 2026-03-02
 - Los números de línea ahora permiten seleccionar la línea completa al hacer clic y extender la selección al arrastrar.
 - El gutter de números de línea acepta interacción directa para facilitar la selección por rangos.

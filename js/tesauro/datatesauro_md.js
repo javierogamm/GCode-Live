@@ -80,6 +80,9 @@ const DataTesauro = {
                 this.togglePanel();
             });
         }
+        if (typeof window.ensureTemplateButtons === "function") {
+            window.ensureTemplateButtons();
+        }
         // === NUEVO BOTÓN FLOTANTE: acceso directo al gestor completo ===
         if (!document.getElementById("btnTesauroManagerFloating")) {
             const btn2 = document.createElement("button");
