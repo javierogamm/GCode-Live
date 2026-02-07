@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
       res.status(400).json({ error: "Missing id" });
       return;
     }
-    const query = `?select=id,procedimiento&limit=1&id=eq.${encodeURIComponent(id)}`;
+    const query = `?select=id,proyecto,plantilla,user,subfuncion,json&limit=1&id=eq.${encodeURIComponent(id)}`;
     const response = await supabaseFetch("Code_Markdowns", { method: "GET", query });
     if (!response.ok) {
       const detail = await response.text();
