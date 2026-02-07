@@ -43,6 +43,80 @@ function updateLineNumbers() {
     content.style.height = markdownText.scrollHeight + "px";
 }
 
+const lineSelectionState = {
+    isSelecting: false,
+    startLine: null,
+    lastLine: null
+};
+
+function getLineNumberFromElement(element) {
+    if (!element) return null;
+    const lineEl = element.closest(".line-number");
+    if (!lineEl) return null;
+    const value = parseInt(lineEl.textContent, 10);
+    return Number.isFinite(value) ? value : null;
+}
+
+function getLineRangeSelection(text, startLine, endLine) {
+    const lines = text.split("\n");
+    const safeStart = Math.max(1, Math.min(startLine, lines.length));
+    const safeEnd = Math.max(1, Math.min(endLine, lines.length));
+    const minLine = Math.min(safeStart, safeEnd);
+    const maxLine = Math.max(safeStart, safeEnd);
+    let startIndex = 0;
+    for (let i = 0; i < minLine - 1; i++) {
+        startIndex += lines[i].length + 1;
+    }
+    let endIndex = startIndex;
+    for (let i = minLine - 1; i < maxLine; i++) {
+        endIndex += lines[i].length;
+        if (i < lines.length - 1) {
+            endIndex += 1;
+        }
+    }
+    return { startIndex, endIndex };
+}
+
+function applyLineSelection(startLine, endLine) {
+    if (!markdownText) return;
+    const text = markdownText.value || "";
+    const { startIndex, endIndex } = getLineRangeSelection(text, startLine, endLine);
+    markdownText.focus();
+    markdownText.setSelectionRange(startIndex, endIndex);
+}
+
+function handleLineNumberMouseDown(event) {
+    if (event.button !== 0) return;
+    const line = getLineNumberFromElement(event.target);
+    if (!line) return;
+    event.preventDefault();
+    lineSelectionState.isSelecting = true;
+    lineSelectionState.startLine = line;
+    lineSelectionState.lastLine = line;
+    applyLineSelection(line, line);
+}
+
+function handleLineNumberMouseMove(event) {
+    if (!lineSelectionState.isSelecting) return;
+    const element = document.elementFromPoint(event.clientX, event.clientY);
+    const line = getLineNumberFromElement(element);
+    if (!line || line === lineSelectionState.lastLine) return;
+    lineSelectionState.lastLine = line;
+    applyLineSelection(lineSelectionState.startLine, line);
+}
+
+function handleLineNumberMouseUp() {
+    lineSelectionState.isSelecting = false;
+    lineSelectionState.startLine = null;
+    lineSelectionState.lastLine = null;
+}
+
+if (lineNumbers && markdownText) {
+    lineNumbers.addEventListener("mousedown", handleLineNumberMouseDown);
+    document.addEventListener("mousemove", handleLineNumberMouseMove);
+    document.addEventListener("mouseup", handleLineNumberMouseUp);
+}
+
 // Barra de acciones flotantes (Sections, LET, Definition, Tesauro)
 function ensureFloatingActionRow() {
     const toolbar = document.getElementById("toolbar") || document.querySelector(".toolbar");
