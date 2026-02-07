@@ -1,5 +1,8 @@
 # Log de cambios
 
+## v1.3.47 - 2026-03-09
+- La validación de sections ahora acepta valores con espacios dentro de comillas dobles sin marcarlos como error.
+
 ## v1.3.46 - 2025-03-08
 - El modal de carga ahora replica el flujo de carpetas del guardado y muestra el mensaje correcto si fallan las subfunciones.
 
