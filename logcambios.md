@@ -1,5 +1,8 @@
 # Log de cambios
 
+## v1.3.46 - 2025-03-08
+- El modal de carga ahora replica el flujo de carpetas del guardado y muestra el mensaje correcto si fallan las subfunciones.
+
 ## v1.3.45 - 2025-03-08
 - Se añadió el botón Cargar debajo de Guardar para abrir un modal con carpetas y proyectos guardados.
 - El modal de carga muestra autor y fecha de guardado y permite cargar el proyecto completo desde la BDD.

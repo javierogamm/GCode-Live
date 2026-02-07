@@ -758,7 +758,7 @@ function ensureLoadProjectModal() {
             </div>
             <div class="modal-body load-project-body">
                 <div class="load-project-sidebar">
-                    <h4>Carpetas (subfunciones)</h4>
+                    <h4>Carpetas guardadas</h4>
                     <div class="load-project-folder-list" id="loadProjectFolderList"></div>
                 </div>
                 <div class="load-project-main">
@@ -795,30 +795,24 @@ function ensureLoadProjectModal() {
     const renderSubfunciones = () => {
         if (!folderList) return;
         folderList.innerHTML = "";
-        const baseItems = [{ label: "Todas", value: "" }];
-        const items = baseItems.concat(
-            loadProjectState.subfunciones.map((name) => ({
-                label: name || "Sin carpeta",
-                value: name || ""
-            }))
-        );
-        if (!items.length) {
+        if (!loadProjectState.subfunciones.length) {
             folderList.innerHTML = `<div class="muted">Sin carpetas guardadas.</div>`;
             return;
         }
-        items.forEach((item) => {
+        loadProjectState.subfunciones.forEach((subfuncion) => {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "load-project-folder-item";
-            button.textContent = `📁 ${item.label}`;
+            const label = subfuncion || "Sin carpeta";
+            button.textContent = `📁 ${label}`;
             button.addEventListener("click", () => {
-                loadProjectState.activeSubfuncion = item.value;
+                loadProjectState.activeSubfuncion = label === "Sin carpeta" ? "" : label;
                 renderSubfunciones();
                 if (typeof modal.loadProjects === "function") {
-                    modal.loadProjects(item.value);
+                    modal.loadProjects(loadProjectState.activeSubfuncion);
                 }
             });
-            if (loadProjectState.activeSubfuncion === item.value) {
+            if (loadProjectState.activeSubfuncion === (label === "Sin carpeta" ? "" : label)) {
                 button.classList.add("active");
             }
             folderList.appendChild(button);
@@ -882,18 +876,24 @@ function ensureLoadProjectModal() {
 
     const loadSubfunciones = async () => {
         try {
-            setStatus("Cargando carpetas...", false);
+            setStatus("Cargando subfunciones...", false);
             const response = await fetch("/api/subfunciones");
             if (!response.ok) {
                 throw new Error("Error al cargar carpetas.");
             }
             const data = await response.json();
             loadProjectState.subfunciones = Array.isArray(data) ? data : [];
+            if (!loadProjectState.activeSubfuncion && loadProjectState.subfunciones.length) {
+                loadProjectState.activeSubfuncion = loadProjectState.subfunciones[0] || "";
+            }
             renderSubfunciones();
+            if (typeof modal.loadProjects === "function") {
+                modal.loadProjects(loadProjectState.activeSubfuncion);
+            }
             setStatus("");
         } catch (error) {
             console.error(error);
-            setStatus("No se pudieron cargar las carpetas.");
+            setStatus("No se pudieron cargar las subfunciones.");
         }
     };
 
@@ -946,9 +946,6 @@ if (btnCargarProyecto) {
         modal.style.display = "flex";
         if (typeof modal.loadSubfunciones === "function") {
             modal.loadSubfunciones();
-        }
-        if (typeof modal.loadProjects === "function") {
-            modal.loadProjects(loadProjectState.activeSubfuncion);
         }
     });
 }
