@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.45 - 2025-03-08
+- Se añadió el botón Cargar debajo de Guardar para abrir un modal con carpetas y proyectos guardados.
+- El modal de carga muestra autor y fecha de guardado y permite cargar el proyecto completo desde la BDD.
+
 ## v1.3.44 - 2026-03-04
 - El guardado en base de datos ahora persiste una sola fila por proyecto con el JSON completo, plantillas concatenadas, usuario y carpeta (subfunción).
 - El modal de guardado muestra las subfunciones existentes como carpetas y permite definir una nueva carpeta al guardar.
