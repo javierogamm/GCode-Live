@@ -2898,7 +2898,7 @@ function updateHighlight() {
 
     const hasInvalidConditionValues = (expr) => {
         const comparisonRegex =
-            /\b(?:personalized|variable)\.[A-Za-z0-9_]+\s*(==|!=|>=|<=|>|<)\s*([^\s()]+|"[^"]*")/gi;
+            /\b(?:personalized|variable)\.[A-Za-z0-9_]+\s*(==|!=|>=|<=|>|<)\s*("[^"]*"|[^\s()"]+)/gi;
         let match;
         while ((match = comparisonRegex.exec(expr)) !== null) {
             const rawValue = match[2];
