@@ -347,6 +347,13 @@ function ensureTemplateManagerModal() {
         });
     }
 
+    if (subfunctionInput) {
+        subfunctionInput.addEventListener("input", () => {
+            saveProjectState.selectedSubfuncion = subfunctionInput.value.trim();
+            renderSubfunciones();
+        });
+    }
+
     modal.addEventListener("click", (e) => {
         if (e.target === modal) modal.style.display = "none";
     });
@@ -487,7 +494,8 @@ if (btnImportProyecto) {
 
 const saveProjectState = {
     modal: null,
-    projects: []
+    subfunciones: [],
+    selectedSubfuncion: ""
 };
 
 function ensureSaveProjectModal() {
@@ -501,24 +509,24 @@ function ensureSaveProjectModal() {
             <div class="modal-header">
                 <div>
                     <h3>Guardar proyecto en base de datos</h3>
-                    <p class="muted">Cada plantilla se guarda como una fila del proyecto.</p>
+                    <p class="muted">Cada proyecto se guarda en una sola fila.</p>
                 </div>
                 <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
             </div>
             <div class="modal-body save-project-body">
                 <div class="save-project-sidebar">
-                    <h4>Plantillas guardadas</h4>
+                    <h4>Carpetas (subfunciones)</h4>
                     <div class="save-project-folder-list" id="saveProjectTemplateList"></div>
                 </div>
                 <div class="save-project-main">
                     <div class="save-project-input-row">
                         <input id="saveProjectProjectInput" type="text" placeholder="Nombre del proyecto" />
-                        <input id="saveProjectTemplateInput" type="text" placeholder="Nombre de la plantilla" />
+                        <input id="saveProjectSubfunctionInput" type="text" placeholder="Carpeta / subfunción" />
                     </div>
                     <div class="save-project-list" id="saveProjectList"></div>
                     <div class="save-project-status" id="saveProjectStatus"></div>
                     <div class="save-project-footer">
-                        <button type="button" class="save-project-save-btn" data-action="guardar">Guardar plantilla</button>
+                        <button type="button" class="save-project-save-btn" data-action="guardar">Guardar proyecto</button>
                     </div>
                 </div>
             </div>
@@ -531,9 +539,8 @@ function ensureSaveProjectModal() {
     const statusEl = modal.querySelector("#saveProjectStatus");
     const folderList = modal.querySelector("#saveProjectTemplateList");
     const projectInput = modal.querySelector("#saveProjectProjectInput");
-    const templateInput = modal.querySelector("#saveProjectTemplateInput");
+    const subfunctionInput = modal.querySelector("#saveProjectSubfunctionInput");
     const saveBtn = modal.querySelector("[data-action='guardar']");
-    const nameInput = templateInput;
 
     const setStatus = (msg, isError = true) => {
         if (!statusEl) return;
@@ -541,56 +548,29 @@ function ensureSaveProjectModal() {
         statusEl.style.color = isError ? "#b91c1c" : "#15803d";
     };
 
-    const renderDbTemplates = () => {
+    const renderSubfunciones = () => {
         if (!folderList) return;
         folderList.innerHTML = "";
-        if (!saveProjectState.projects.length) {
-            folderList.innerHTML = `<div class="muted">Sin plantillas guardadas.</div>`;
+        if (!saveProjectState.subfunciones.length) {
+            folderList.innerHTML = `<div class="muted">Sin carpetas guardadas.</div>`;
             return;
         }
-        saveProjectState.projects.forEach((project) => {
+        const current = (subfunctionInput ? subfunctionInput.value.trim() : "")
+            || saveProjectState.selectedSubfuncion;
+        saveProjectState.subfunciones.forEach((subfuncion) => {
             const item = document.createElement("button");
             item.type = "button";
             item.className = "save-project-folder-item";
-            const label = project.subfuncion || "Plantilla";
-            item.innerHTML = `📄 ${label}`;
-            item.addEventListener("click", async () => {
-                syncActiveTemplateMarkdown();
-                if (!templateInput) return;
-                templateInput.value = label;
-                if (project.id) {
-                    try {
-                        setStatus("Cargando plantilla...", false);
-                        const response = await fetch(`/api/project?id=${encodeURIComponent(project.id)}`);
-                        if (!response.ok) {
-                            throw new Error("No se pudo cargar la plantilla.");
-                        }
-                        const payload = await response.json();
-                        if (payload && payload.procedimiento) {
-                            const normalized = payload.procedimiento;
-                            const markdown = typeof normalized.markdown === "string" ? normalized.markdown : "";
-                            const existing = projectState.templates.find((tpl) => tpl.name === label);
-                            if (existing) {
-                                existing.markdown = markdown;
-                                projectState.activeTemplateId = existing.id;
-                            } else {
-                                addTemplate(label, markdown);
-                            }
-                            if (markdownText) {
-                                markdownText.value = markdown;
-                                resetUndoStacks(markdownText.value);
-                                updateHighlight();
-                                updateLineNumbers();
-                            }
-                            setStatus("Plantilla cargada en el editor.", false);
-                        } else {
-                            setStatus("No se encontró contenido en la plantilla seleccionada.");
-                        }
-                    } catch (error) {
-                        console.error(error);
-                        setStatus("No se pudo cargar la plantilla.");
-                    }
+            item.innerHTML = `📁 ${subfuncion}`;
+            if (current && subfuncion === current) {
+                item.classList.add("active");
+            }
+            item.addEventListener("click", () => {
+                saveProjectState.selectedSubfuncion = subfuncion;
+                if (subfunctionInput) {
+                    subfunctionInput.value = subfuncion;
                 }
+                renderSubfunciones();
             });
             folderList.appendChild(item);
         });
@@ -612,10 +592,9 @@ function ensureSaveProjectModal() {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "save-project-use-btn";
-            button.textContent = "Usar plantilla";
+            button.textContent = "Editar";
             button.addEventListener("click", async () => {
                 syncActiveTemplateMarkdown();
-                if (templateInput) templateInput.value = tpl.name || "";
                 projectState.activeTemplateId = tpl.id;
                 if (markdownText) {
                     markdownText.value = tpl.markdown || "";
@@ -630,31 +609,33 @@ function ensureSaveProjectModal() {
         });
     };
 
-    const loadTemplatesFromDb = async (projectName) => {
-        if (!projectName) {
-            saveProjectState.projects = [];
-            renderDbTemplates();
-            return;
-        }
+    const loadSubfuncionesFromDb = async () => {
         try {
-            setStatus("Cargando plantillas...", false);
-            const response = await fetch(`/api/projects?nombre=${encodeURIComponent(projectName)}`);
+            setStatus("Cargando carpetas...", false);
+            const response = await fetch("/api/subfunciones");
             if (!response.ok) {
-                throw new Error("Error al cargar plantillas.");
+                throw new Error("Error al cargar carpetas.");
             }
             const data = await response.json();
-            saveProjectState.projects = Array.isArray(data) ? data : [];
-            renderDbTemplates();
+            saveProjectState.subfunciones = Array.isArray(data) ? data : [];
+            renderSubfunciones();
             setStatus("");
         } catch (error) {
             console.error(error);
-            setStatus("No se pudieron cargar las plantillas.");
+            setStatus("No se pudieron cargar las carpetas.");
         }
     };
 
     if (closeBtn) {
         closeBtn.addEventListener("click", () => {
             modal.style.display = "none";
+        });
+    }
+
+    if (subfunctionInput) {
+        subfunctionInput.addEventListener("input", () => {
+            saveProjectState.selectedSubfuncion = subfunctionInput.value.trim();
+            renderSubfunciones();
         });
     }
 
@@ -665,61 +646,68 @@ function ensureSaveProjectModal() {
     if (saveBtn) {
         saveBtn.addEventListener("click", async () => {
             const proyectoNombre = projectInput ? projectInput.value.trim() : "";
-            const plantillaNombre = nameInput ? nameInput.value.trim() : "";
+            const subfuncionNombre = subfunctionInput ? subfunctionInput.value.trim() : "";
             if (!proyectoNombre) {
                 setStatus("Indica el nombre del proyecto.");
                 return;
             }
-            if (!plantillaNombre) {
-                setStatus("Indica el nombre de la plantilla.");
+            if (!subfuncionNombre) {
+                setStatus("Indica la carpeta (subfunción).");
                 return;
             }
-            const active = getActiveTemplate();
-            if (active && projectState.templates.some((tpl) => tpl.name === plantillaNombre && tpl.id !== active.id)) {
-                setStatus("Ya existe una plantilla con ese nombre.");
+            const usuarioNombre = window.AuthManager?.user?.name || "";
+            if (!usuarioNombre) {
+                setStatus("Inicia sesión para guardar el proyecto.");
                 return;
             }
-            if (active && active.name !== plantillaNombre) {
-                active.name = plantillaNombre;
-            }
+            syncActiveTemplateMarkdown();
             setProjectName(proyectoNombre);
-            const markdown = markdownText ? markdownText.value : "";
             const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
                 ? DataTesauro.campos
                 : [];
-            const procedimiento = {
+            const plantillaNombres = projectState.templates
+                .map((tpl) => (tpl.name || "").trim())
+                .filter(Boolean)
+                .join(", ");
+            const proyectoPayload = {
                 proyecto: {
                     nombre: proyectoNombre,
-                    plantilla: plantillaNombre
+                    plantillas: projectState.templates.map((tpl) => ({
+                        nombre: tpl.name,
+                        markdown: tpl.markdown
+                    })),
+                    plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
                 },
-                markdown,
                 tesauros
             };
             try {
-                setStatus("Guardando plantilla...", false);
+                setStatus("Guardando proyecto...", false);
                 const response = await fetch("/api/projects", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({ nombre: proyectoNombre, subfuncion: plantillaNombre, procedimiento })
+                    body: JSON.stringify({
+                        proyecto: proyectoNombre,
+                        plantilla: plantillaNombres,
+                        user: usuarioNombre,
+                        subfuncion: subfuncionNombre,
+                        json: proyectoPayload
+                    })
                 });
                 if (!response.ok) {
-                    throw new Error("Error al guardar la plantilla.");
+                    throw new Error("Error al guardar el proyecto.");
                 }
-                setStatus("Plantilla guardada correctamente.", false);
-                const existing = projectState.templates.find((tpl) => tpl.name === plantillaNombre);
-                if (existing) {
-                    existing.markdown = markdown;
-                    projectState.activeTemplateId = existing.id;
-                } else {
-                    addTemplate(plantillaNombre, markdown);
+                setStatus("Proyecto guardado correctamente.", false);
+                saveProjectState.selectedSubfuncion = subfuncionNombre;
+                if (subfunctionInput) {
+                    subfunctionInput.value = subfuncionNombre;
                 }
                 renderLocalTemplates();
-                loadTemplatesFromDb(proyectoNombre);
+                loadSubfuncionesFromDb();
             } catch (error) {
                 console.error(error);
-                setStatus("No se pudo guardar la plantilla.");
+                setStatus("No se pudo guardar el proyecto.");
             }
         });
     }
@@ -731,9 +719,9 @@ function ensureSaveProjectModal() {
     });
 
     saveProjectState.modal = modal;
-    modal.loadTemplatesFromDb = loadTemplatesFromDb;
+    modal.loadSubfuncionesFromDb = loadSubfuncionesFromDb;
     modal.renderLocalTemplates = renderLocalTemplates;
-    modal.renderDbTemplates = renderDbTemplates;
+    modal.renderSubfunciones = renderSubfunciones;
     return modal;
 }
 
@@ -742,21 +730,19 @@ if (btnGuardarProyecto) {
         syncActiveTemplateMarkdown();
         const modal = ensureSaveProjectModal();
         const projectInput = modal.querySelector("#saveProjectProjectInput");
-        const templateInput = modal.querySelector("#saveProjectTemplateInput");
+        const subfunctionInput = modal.querySelector("#saveProjectSubfunctionInput");
         if (projectInput) {
             projectInput.value = projectState.name || "";
         }
-        if (templateInput) {
-            const active = getActiveTemplate();
-            templateInput.value = active ? active.name : "";
+        if (subfunctionInput) {
+            subfunctionInput.value = saveProjectState.selectedSubfuncion || "";
         }
         modal.style.display = "flex";
         if (typeof modal.renderLocalTemplates === "function") {
             modal.renderLocalTemplates();
         }
-        const projectName = projectState.name || (projectInput ? projectInput.value.trim() : "");
-        if (typeof modal.loadTemplatesFromDb === "function") {
-            modal.loadTemplatesFromDb(projectName);
+        if (typeof modal.loadSubfuncionesFromDb === "function") {
+            modal.loadSubfuncionesFromDb();
         }
     });
 }
