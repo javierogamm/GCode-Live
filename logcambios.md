@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.48 - 2026-03-10
+- Se añadió el documento tech.md con el inventario de tecnologías de la app.
+- Se actualizó la versión visible y la metadata del proyecto.
+
 ## v1.3.47 - 2026-03-09
 - La validación de sections ahora acepta valores con espacios dentro de comillas dobles sin marcarlos como error.
 
