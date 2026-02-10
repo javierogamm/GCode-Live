@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.50 - 2026-02-10
+- El paso final del importador desde Markdown ahora guarda en el gestor todos los tesauros detectados en el Markdown, incluso si no vienen del copypaste.
+- Se ajustó el cierre del wizard para mostrar el total importado/actualizado desde Markdown y mantener opciones de selector cuando existan.
+
 ## v1.3.49 - 2026-02-10
 - El paso 2 del importador de tesauros desde Markdown ahora incluye el botón "Saltar" para continuar el flujo sin pegar copypaste.
 - Al saltar ese paso se construye la lista combinada con valores por defecto y se permite seguir hasta la confirmación final.
