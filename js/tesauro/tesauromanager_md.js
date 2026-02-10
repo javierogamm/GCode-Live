@@ -1831,15 +1831,15 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                 .map(c => [c.ref.toLowerCase(), c])
         );
 
-        const coincidentes = state.combinedTesauros
-            .filter(item => item.enMarkdown && item.fromPaste);
+        const importables = state.combinedTesauros
+            .filter(item => item.enMarkdown);
 
-        if (!coincidentes.length) {
-            alert("No hay tesauros coincidentes entre el Markdown y el copypaste.");
+        if (!importables.length) {
+            alert("No hay tesauros detectados en el Markdown para importar.");
             return;
         }
 
-        const nuevos = coincidentes.map(item => {
+        const nuevos = importables.map(item => {
             const ref = this.limitReferenceLength(item.ref);
             const key = ref.toLowerCase();
             const existing = actualMap.get(key) || {};
@@ -1852,7 +1852,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
             };
 
             if (nuevo.tipo === "selector") {
-                const opciones = state.opcionesPorRef[ref] || existing.opciones;
+                const opciones = state.opcionesPorRef[ref] || item.opciones || existing.opciones;
                 nuevo.opciones = Array.isArray(opciones) ? opciones : [];
             }
 
@@ -1863,7 +1863,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
         this.render();
         this.recordHistory();
 
-        alert("✔ Importados/actualizados " + nuevos.length + " tesauros coincidentes desde Markdown.");
+        alert("✔ Importados/actualizados " + nuevos.length + " tesauros desde Markdown.");
         if (this.markdownImportModal) this.markdownImportModal.style.display = "none";
         this.markdownImportState = null;
     },
