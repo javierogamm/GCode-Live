@@ -1497,6 +1497,10 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                         flex:1; background:#f1f5f9; border:1px solid #cbd5e1;
                         padding:8px; border-radius:8px; cursor:pointer;
                     ">Cancelar</button>
+                    <button id="tmMdSkipPaste" style="
+                        flex:1; background:#e2e8f0; border:1px solid #cbd5e1;
+                        padding:8px; border-radius:8px; cursor:pointer;
+                    ">Saltar</button>
                     <button id="tmMdLoadPaste" style="
                         flex:1; background:#10b981; color:white;
                         border:none; padding:8px; border-radius:8px;
@@ -1518,6 +1522,12 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                 }
                 state.pasteTesauros = parsed;
                 state.combinedTesauros = this.buildMarkdownImportCombinedList({ forceDefaults: false });
+                this.renderMarkdownImportStep(3);
+            });
+
+            container.querySelector("#tmMdSkipPaste").addEventListener("click", () => {
+                state.pasteTesauros = [];
+                state.combinedTesauros = this.buildMarkdownImportCombinedList({ forceDefaults: true });
                 this.renderMarkdownImportStep(3);
             });
             return;

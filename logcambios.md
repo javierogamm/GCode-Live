@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.49 - 2026-02-10
+- El paso 2 del importador de tesauros desde Markdown ahora incluye el botón "Saltar" para continuar el flujo sin pegar copypaste.
+- Al saltar ese paso se construye la lista combinada con valores por defecto y se permite seguir hasta la confirmación final.
+
 ## v1.3.48 - 2026-02-10
 - La detección de tesauros al importar desde Markdown ahora reconoce bloques con atributos adicionales como `language` y `editable: false`.
 - Si un mismo tesauro aparece varias veces en el Markdown por idioma, se consolida en una sola referencia importable.
