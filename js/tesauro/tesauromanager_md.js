@@ -1258,10 +1258,12 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
 
     detectTesaurosFromMarkdown(rawText) {
         const refsSet = new Set();
-        const regex = /\{\{\s*personalized\s*\|\s*reference\s*:\s*([A-Za-z0-9_]+)\s*\}\}/gi;
+        const regexBloque = /\{\{\s*personalized\b([\s\S]*?)\}\}/gi;
         let m;
-        while ((m = regex.exec(rawText || "")) !== null) {
-            const ref = (m[1] || "").trim();
+        while ((m = regexBloque.exec(rawText || "")) !== null) {
+            const bloque = m[0] || "";
+            const refMatch = bloque.match(/(?:\||\{\{)\s*reference\s*:\s*([A-Za-z0-9_]+)/i);
+            const ref = (refMatch && refMatch[1] ? refMatch[1] : "").trim();
             if (ref) refsSet.add(ref);
         }
         return Array.from(refsSet);

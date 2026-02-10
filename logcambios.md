@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.48 - 2026-02-10
+- La detección de tesauros al importar desde Markdown ahora reconoce bloques con atributos adicionales como `language` y `editable: false`.
+- Si un mismo tesauro aparece varias veces en el Markdown por idioma, se consolida en una sola referencia importable.
+
 ## v1.3.47 - 2026-03-09
 - La validación de sections ahora acepta valores con espacios dentro de comillas dobles sin marcarlos como error.
 
