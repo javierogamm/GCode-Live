@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.51 - 2026-02-10
+- Se añadieron acciones de sobrescribir y eliminar en los modales de Guardar y Cargar proyectos con confirmación previa.
+- Sobrescribir y eliminar solo se habilitan al creador del registro; el backend ahora valida propiedad para impedir operaciones por terceros.
+- Al sobrescribir desde Guardar, la actualización se confirma y el modal se cierra automáticamente.
+
 ## v1.3.50 - 2026-02-10
 - El paso final del importador desde Markdown ahora guarda en el gestor todos los tesauros detectados en el Markdown, incluso si no vienen del copypaste.
 - Se ajustó el cierre del wizard para mostrar el total importado/actualizado desde Markdown y mantener opciones de selector cuando existan.

@@ -16,6 +16,17 @@ const btnCargarProyecto = document.getElementById("btnCargarProyecto");
 const btnExportCsv = document.getElementById("btnExportCsv");
 const projectNameInput = document.getElementById("projectNameInput");
 
+function getCurrentAuthUserName() {
+    const stored = localStorage.getItem("gcUser");
+    if (!stored) return "";
+    try {
+        const parsed = JSON.parse(stored);
+        return parsed?.name || "";
+    } catch (error) {
+        return "";
+    }
+}
+
 function ensureLineNumbersContent() {
     if (!lineNumbers) return null;
     let content = lineNumbers.querySelector(".line-numbers-content");
@@ -489,7 +500,8 @@ if (btnImportProyecto) {
 const saveProjectState = {
     modal: null,
     subfunciones: [],
-    activeSubfuncion: ""
+    activeSubfuncion: "",
+    projects: []
 };
 
 function ensureSaveProjectModal() {
@@ -535,16 +547,6 @@ function ensureSaveProjectModal() {
     const projectInput = modal.querySelector("#saveProjectProjectInput");
     const subfuncionInput = modal.querySelector("#saveProjectSubfuncionInput");
     const saveBtn = modal.querySelector("[data-action='guardar']");
-    const getCurrentUser = () => {
-        const stored = localStorage.getItem("gcUser");
-        if (!stored) return "";
-        try {
-            const parsed = JSON.parse(stored);
-            return parsed?.name || "";
-        } catch (error) {
-            return "";
-        }
-    };
 
     const setStatus = (msg, isError = true) => {
         if (!statusEl) return;
@@ -571,6 +573,9 @@ function ensureSaveProjectModal() {
                     subfuncionInput.value = label === "Sin carpeta" ? "" : label;
                 }
                 renderSubfunciones();
+                if (typeof modal.loadProjects === "function") {
+                    modal.loadProjects(subfuncionInput ? subfuncionInput.value.trim() : "");
+                }
             });
             if (saveProjectState.activeSubfuncion === label) {
                 item.classList.add("active");
@@ -612,6 +617,104 @@ function ensureSaveProjectModal() {
         });
     };
 
+    const removeProject = async (project) => {
+        const currentUser = getCurrentAuthUserName();
+        if (!currentUser) {
+            setStatus("Debes iniciar sesión para eliminar.");
+            return;
+        }
+        const owner = (project?.user || "").trim();
+        if (!owner || currentUser !== owner) {
+            setStatus("Solo el creador puede eliminar este registro.");
+            return;
+        }
+        const confirmation = window.confirm(`¿Eliminar el proyecto "${project.proyecto || "Sin nombre"}"? Esta acción no se puede deshacer.`);
+        if (!confirmation) return;
+        try {
+            setStatus("Eliminando proyecto...", false);
+            const response = await fetch(`/api/project?id=${encodeURIComponent(project.id)}`, {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ user: currentUser })
+            });
+            if (!response.ok) {
+                throw new Error("Error al eliminar el proyecto.");
+            }
+            setStatus("Proyecto eliminado correctamente.", false);
+            if (typeof modal.loadProjects === "function") {
+                await modal.loadProjects(subfuncionInput ? subfuncionInput.value.trim() : "");
+            }
+            if (typeof modal.loadSubfunciones === "function") {
+                await modal.loadSubfunciones();
+            }
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudo eliminar el proyecto.");
+        }
+    };
+
+    const renderRemoteProjects = () => {
+        const list = modal.querySelector("#saveProjectList");
+        if (!list) return;
+        list.innerHTML = "";
+        if (!saveProjectState.projects.length) {
+            list.innerHTML = `<div class="muted">No hay proyectos guardados para esta carpeta.</div>`;
+            return;
+        }
+        const currentUser = getCurrentAuthUserName();
+        saveProjectState.projects.forEach((project) => {
+            const row = document.createElement("div");
+            row.className = "save-project-item";
+
+            const meta = document.createElement("div");
+            meta.className = "save-project-meta";
+            const title = document.createElement("span");
+            title.textContent = project.proyecto || "Proyecto sin nombre";
+            const owner = document.createElement("small");
+            owner.className = "save-project-owner";
+            owner.textContent = `Autor: ${project.user || "Sin autor"}`;
+            meta.appendChild(title);
+            meta.appendChild(owner);
+
+            const actions = document.createElement("div");
+            actions.className = "save-project-actions";
+
+            const isOwner = currentUser && project.user && currentUser === project.user;
+            if (isOwner) {
+                const overwriteBtn = document.createElement("button");
+                overwriteBtn.type = "button";
+                overwriteBtn.className = "save-project-use-btn";
+                overwriteBtn.textContent = "Sobrescribir";
+                overwriteBtn.addEventListener("click", async () => {
+                    if (!window.confirm(`¿Sobrescribir el proyecto "${project.proyecto || "Sin nombre"}"?`)) return;
+                    if (projectInput) {
+                        projectInput.value = project.proyecto || "";
+                    }
+                    await saveProject(true);
+                });
+                actions.appendChild(overwriteBtn);
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.type = "button";
+                deleteBtn.className = "save-project-delete-btn";
+                deleteBtn.textContent = "Eliminar";
+                deleteBtn.addEventListener("click", () => removeProject(project));
+                actions.appendChild(deleteBtn);
+            } else {
+                const readonly = document.createElement("small");
+                readonly.className = "save-project-owner";
+                readonly.textContent = "Solo el creador puede sobrescribir/eliminar";
+                actions.appendChild(readonly);
+            }
+
+            row.appendChild(meta);
+            row.appendChild(actions);
+            list.appendChild(row);
+        });
+    };
+
     const loadSubfunciones = async () => {
         try {
             setStatus("Cargando carpetas...", false);
@@ -629,6 +732,113 @@ function ensureSaveProjectModal() {
         }
     };
 
+    const loadProjects = async (subfuncion = "") => {
+        try {
+            setStatus("Cargando proyectos guardados...", false);
+            const query = subfuncion ? `?subfuncion=${encodeURIComponent(subfuncion)}` : "";
+            const response = await fetch(`/api/projects${query}`);
+            if (!response.ok) {
+                throw new Error("Error al cargar proyectos.");
+            }
+            const data = await response.json();
+            saveProjectState.projects = Array.isArray(data) ? data : [];
+            renderRemoteProjects();
+            setStatus("");
+        } catch (error) {
+            console.error(error);
+            saveProjectState.projects = [];
+            renderRemoteProjects();
+            setStatus("No se pudieron cargar los proyectos guardados.");
+        }
+    };
+
+    const saveProject = async (overwrite = false) => {
+        const proyectoNombre = projectInput ? projectInput.value.trim() : "";
+        const subfuncionNombre = subfuncionInput ? subfuncionInput.value.trim() : "";
+        const currentUser = getCurrentAuthUserName();
+
+        if (!proyectoNombre) {
+            setStatus("Indica el nombre del proyecto.");
+            return;
+        }
+        if (!subfuncionNombre) {
+            setStatus("Indica la carpeta (subfunción).");
+            return;
+        }
+        if (!currentUser) {
+            setStatus("Debes iniciar sesión para guardar.");
+            return;
+        }
+
+        setProjectName(proyectoNombre);
+        const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
+            ? DataTesauro.campos
+            : [];
+        const procedimiento = {
+            proyecto: {
+                nombre: proyectoNombre,
+                plantillas: projectState.templates.map((tpl) => ({
+                    nombre: tpl.name,
+                    markdown: tpl.markdown
+                })),
+                plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
+            },
+            tesauros
+        };
+
+        try {
+            const plantillaResumen = projectState.templates
+                .map((tpl) => tpl.name)
+                .filter(Boolean)
+                .join(", ");
+            setStatus(overwrite ? "Sobrescribiendo proyecto..." : "Guardando proyecto...", false);
+            const response = await fetch("/api/projects", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    proyecto: proyectoNombre,
+                    plantilla: plantillaResumen,
+                    user: currentUser,
+                    subfuncion: subfuncionNombre,
+                    json: procedimiento,
+                    overwrite
+                })
+            });
+            if (!response.ok) {
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (error) {
+                    payload = null;
+                }
+                if (response.status === 409 && payload?.code === "PROJECT_EXISTS") {
+                    setStatus(`Ya existe un registro para "${proyectoNombre}". Si eres el creador, usa "Sobrescribir".`);
+                    await loadProjects(subfuncionNombre);
+                    return;
+                }
+                if (response.status === 403 && payload?.code === "OWNER_REQUIRED") {
+                    const owner = payload?.owner || "otro usuario";
+                    setStatus(`Solo ${owner} puede sobrescribir este registro.`);
+                    return;
+                }
+                throw new Error("Error al guardar el proyecto.");
+            }
+            saveProjectState.activeSubfuncion = subfuncionNombre;
+            setStatus(overwrite ? "Proyecto sobrescrito correctamente." : "Proyecto guardado correctamente.", false);
+            renderLocalTemplates();
+            await loadSubfunciones();
+            await loadProjects(subfuncionNombre);
+            if (overwrite) {
+                modal.style.display = "none";
+            }
+        } catch (error) {
+            console.error(error);
+            setStatus(overwrite ? "No se pudo sobrescribir el proyecto." : "No se pudo guardar el proyecto.");
+        }
+    };
+
     if (closeBtn) {
         closeBtn.addEventListener("click", () => {
             modal.style.display = "none";
@@ -640,61 +850,16 @@ function ensureSaveProjectModal() {
     });
 
     if (saveBtn) {
-        saveBtn.addEventListener("click", async () => {
-            const proyectoNombre = projectInput ? projectInput.value.trim() : "";
-            const subfuncionNombre = subfuncionInput ? subfuncionInput.value.trim() : "";
-            if (!proyectoNombre) {
-                setStatus("Indica el nombre del proyecto.");
-                return;
-            }
-            if (!subfuncionNombre) {
-                setStatus("Indica la carpeta (subfunción).");
-                return;
-            }
-            setProjectName(proyectoNombre);
-            const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
-                ? DataTesauro.campos
-                : [];
-            const procedimiento = {
-                proyecto: {
-                    nombre: proyectoNombre,
-                    plantillas: projectState.templates.map((tpl) => ({
-                        nombre: tpl.name,
-                        markdown: tpl.markdown
-                    })),
-                    plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
-                },
-                tesauros
-            };
-            try {
-                const plantillaResumen = projectState.templates
-                    .map((tpl) => tpl.name)
-                    .filter(Boolean)
-                    .join(", ");
-                setStatus("Guardando proyecto...", false);
-                const response = await fetch("/api/projects", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        proyecto: proyectoNombre,
-                        plantilla: plantillaResumen,
-                        user: getCurrentUser(),
-                        subfuncion: subfuncionNombre,
-                        json: procedimiento
-                    })
-                });
-                if (!response.ok) {
-                    throw new Error("Error al guardar el proyecto.");
-                }
-                saveProjectState.activeSubfuncion = subfuncionNombre;
-                setStatus("Proyecto guardado correctamente.", false);
-                renderLocalTemplates();
-                loadSubfunciones();
-            } catch (error) {
-                console.error(error);
-                setStatus("No se pudo guardar el proyecto.");
+        saveBtn.addEventListener("click", () => {
+            saveProject(false);
+        });
+    }
+
+    if (subfuncionInput) {
+        subfuncionInput.addEventListener("input", () => {
+            saveProjectState.activeSubfuncion = subfuncionInput.value.trim();
+            if (typeof modal.loadProjects === "function") {
+                modal.loadProjects(saveProjectState.activeSubfuncion);
             }
         });
     }
@@ -707,6 +872,7 @@ function ensureSaveProjectModal() {
 
     saveProjectState.modal = modal;
     modal.loadSubfunciones = loadSubfunciones;
+    modal.loadProjects = loadProjects;
     modal.renderLocalTemplates = renderLocalTemplates;
     modal.renderSubfunciones = renderSubfunciones;
     return modal;
@@ -731,6 +897,9 @@ if (btnGuardarProyecto) {
         if (typeof modal.loadSubfunciones === "function") {
             modal.loadSubfunciones();
         }
+        if (typeof modal.loadProjects === "function") {
+            modal.loadProjects(subfuncionInput ? subfuncionInput.value.trim() : "");
+        }
     });
 }
 
@@ -752,7 +921,7 @@ function ensureLoadProjectModal() {
             <div class="modal-header">
                 <div>
                     <h3>Cargar proyecto desde base de datos</h3>
-                    <p class="muted">Selecciona una carpeta y carga el proyecto completo.</p>
+                    <p class="muted">Selecciona una carpeta y gestiona proyectos guardados.</p>
                 </div>
                 <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
             </div>
@@ -792,6 +961,99 @@ function ensureLoadProjectModal() {
         });
     };
 
+    const deleteProject = async (project) => {
+        const currentUser = getCurrentAuthUserName();
+        const owner = (project?.user || "").trim();
+        if (!currentUser) {
+            setStatus("Debes iniciar sesión para eliminar.");
+            return;
+        }
+        if (!owner || currentUser !== owner) {
+            setStatus("Solo el creador puede eliminar este registro.");
+            return;
+        }
+        const confirmation = window.confirm(`¿Eliminar el proyecto "${project.proyecto || "Sin nombre"}"? Esta acción no se puede deshacer.`);
+        if (!confirmation) return;
+        try {
+            setStatus("Eliminando proyecto...", false);
+            const response = await fetch(`/api/project?id=${encodeURIComponent(project.id)}`, {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ user: currentUser })
+            });
+            if (!response.ok) {
+                throw new Error("Error al eliminar el proyecto.");
+            }
+            setStatus("Proyecto eliminado correctamente.", false);
+            await loadProjects(loadProjectState.activeSubfuncion);
+            await loadSubfunciones();
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudo eliminar el proyecto.");
+        }
+    };
+
+    const overwriteProject = async (project) => {
+        const currentUser = getCurrentAuthUserName();
+        const owner = (project?.user || "").trim();
+        if (!currentUser) {
+            setStatus("Debes iniciar sesión para sobrescribir.");
+            return;
+        }
+        if (!owner || currentUser !== owner) {
+            setStatus("Solo el creador puede sobrescribir este registro.");
+            return;
+        }
+        const confirmation = window.confirm(`¿Sobrescribir el proyecto "${project.proyecto || "Sin nombre"}" con el contenido actual?`);
+        if (!confirmation) return;
+
+        const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos)) ? DataTesauro.campos : [];
+        const procedimiento = {
+            proyecto: {
+                nombre: project.proyecto || projectState.name || "",
+                plantillas: projectState.templates.map((tpl) => ({
+                    nombre: tpl.name,
+                    markdown: tpl.markdown
+                })),
+                plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
+            },
+            tesauros
+        };
+
+        try {
+            setStatus("Sobrescribiendo proyecto...", false);
+            const plantillaResumen = projectState.templates
+                .map((tpl) => tpl.name)
+                .filter(Boolean)
+                .join(", ");
+            const response = await fetch("/api/projects", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    proyecto: project.proyecto,
+                    plantilla: plantillaResumen,
+                    user: currentUser,
+                    subfuncion: project.subfuncion || "",
+                    json: procedimiento,
+                    overwrite: true
+                })
+            });
+            if (!response.ok) {
+                throw new Error("Error al sobrescribir.");
+            }
+            setProjectName(project.proyecto || "");
+            setStatus("Proyecto sobrescrito correctamente.", false);
+            modal.style.display = "none";
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudo sobrescribir el proyecto.");
+        }
+    };
+
     const renderSubfunciones = () => {
         if (!folderList) return;
         folderList.innerHTML = "";
@@ -826,6 +1088,7 @@ function ensureLoadProjectModal() {
             projectList.innerHTML = `<div class="muted">No hay proyectos para esta carpeta.</div>`;
             return;
         }
+        const currentUser = getCurrentAuthUserName();
         loadProjectState.projects.forEach((project) => {
             const row = document.createElement("div");
             row.className = "load-project-item";
@@ -841,11 +1104,15 @@ function ensureLoadProjectModal() {
             details.textContent = `Autor: ${author} · Guardado: ${dateLabel}`;
             meta.appendChild(title);
             meta.appendChild(details);
-            const action = document.createElement("button");
-            action.type = "button";
-            action.className = "load-project-action";
-            action.textContent = "Cargar";
-            action.addEventListener("click", async () => {
+
+            const actions = document.createElement("div");
+            actions.className = "load-project-actions";
+
+            const loadBtn = document.createElement("button");
+            loadBtn.type = "button";
+            loadBtn.className = "load-project-action";
+            loadBtn.textContent = "Cargar";
+            loadBtn.addEventListener("click", async () => {
                 try {
                     setStatus("Cargando proyecto...", false);
                     const response = await fetch(`/api/project?id=${encodeURIComponent(project.id)}`);
@@ -868,8 +1135,27 @@ function ensureLoadProjectModal() {
                     setStatus("No se pudo cargar el proyecto.");
                 }
             });
+            actions.appendChild(loadBtn);
+
+            const isOwner = currentUser && project.user && currentUser === project.user;
+            if (isOwner) {
+                const overwriteBtn = document.createElement("button");
+                overwriteBtn.type = "button";
+                overwriteBtn.className = "load-project-action load-project-action-overwrite";
+                overwriteBtn.textContent = "Sobrescribir";
+                overwriteBtn.addEventListener("click", () => overwriteProject(project));
+                actions.appendChild(overwriteBtn);
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.type = "button";
+                deleteBtn.className = "load-project-action load-project-action-delete";
+                deleteBtn.textContent = "Eliminar";
+                deleteBtn.addEventListener("click", () => deleteProject(project));
+                actions.appendChild(deleteBtn);
+            }
+
             row.appendChild(meta);
-            row.appendChild(action);
+            row.appendChild(actions);
             projectList.appendChild(row);
         });
     };
