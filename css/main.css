@@ -1488,6 +1488,31 @@ body {
   color: #b91c1c;
 }
 
+
+.load-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.load-project-action-overwrite {
+  background: #2563eb;
+}
+
+.load-project-action-overwrite:hover {
+  background: #1d4ed8;
+}
+
+.load-project-action-delete {
+  background: #dc2626;
+}
+
+.load-project-action-delete:hover {
+  background: #b91c1c;
+}
+
 /* =============================
    MODAL PLANTILLAS
    ============================= */
@@ -1683,6 +1708,41 @@ body {
   font-weight: 700;
   font-size: 12px;
   cursor: pointer;
+}
+
+
+.save-project-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.save-project-owner {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.save-project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.save-project-delete-btn {
+  border: none;
+  background: #dc2626;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save-project-delete-btn:hover {
+  background: #b91c1c;
 }
 
 .save-project-footer {

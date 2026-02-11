@@ -37,15 +37,19 @@ module.exports = async (req, res) => {
 
   if (req.method === "POST") {
     try {
-      const { proyecto, plantilla, user, subfuncion, json } = req.body || {};
+      const { proyecto, plantilla, user, subfuncion, json, overwrite } = req.body || {};
       if (!proyecto || !json) {
         res.status(400).json({ error: "Missing required fields" });
         return;
       }
+
+      const normalizedUser = typeof user === "string" ? user.trim() : "";
+      const shouldOverwrite = Boolean(overwrite);
+
       const lookupFilters = [
         `proyecto=eq.${encodeURIComponent(proyecto)}`,
         "limit=1",
-        "select=id"
+        "select=id,user"
       ];
       const lookupQuery = `?${lookupFilters.join("&")}`;
       const lookupResponse = await supabaseFetch("Code_Markdowns", {
@@ -58,9 +62,19 @@ module.exports = async (req, res) => {
         return;
       }
       const lookupData = await lookupResponse.json();
-      const payload = { proyecto, plantilla, user, subfuncion, json };
+      const payload = { proyecto, plantilla, user: normalizedUser, subfuncion, json };
       let response = null;
       if (Array.isArray(lookupData) && lookupData.length) {
+        const existing = lookupData[0] || {};
+        const existingAuthor = typeof existing.user === "string" ? existing.user.trim() : "";
+        if (!shouldOverwrite) {
+          res.status(409).json({ error: "Project already exists", code: "PROJECT_EXISTS", owner: existingAuthor });
+          return;
+        }
+        if (!normalizedUser || normalizedUser !== existingAuthor) {
+          res.status(403).json({ error: "Only owner can overwrite", code: "OWNER_REQUIRED", owner: existingAuthor });
+          return;
+        }
         const existingId = lookupData[0].id;
         response = await supabaseFetch("Code_Markdowns", {
           method: "PATCH",
@@ -82,7 +96,7 @@ module.exports = async (req, res) => {
         return;
       }
       const data = await response.json();
-      res.status(201).json(data);
+      res.status(201).json(data[0] || data);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Supabase env vars missing or request failed" });
