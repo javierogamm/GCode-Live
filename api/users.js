@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
 
   if (req.method === "PATCH") {
     try {
-      const { id, name, pass } = req.body || {};
+      const { id, name, pass, touchAccess } = req.body || {};
       if (!id) {
         res.status(400).json({ error: "Missing id" });
         return;
@@ -59,11 +59,14 @@ module.exports = async (req, res) => {
       const payload = {};
       if (name) payload.name = name;
       if (pass) payload.pass = pass;
+      if (touchAccess) payload.ultimo_acceso_code = new Date().toISOString();
       if (Object.keys(payload).length === 0) {
         res.status(400).json({ error: "No fields to update" });
         return;
       }
-      const query = `?id=eq.${encodeURIComponent(id)}&select=id,name,admin`;
+      const query = `?id=eq.${encodeURIComponent(
+        id
+      )}&select=id,name,admin,ultimo_acceso_code`;
       const response = await supabaseFetch("users", {
         method: "PATCH",
         body: payload,
