@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.54 - 2026-02-13
+- Se registra `ultimo_acceso_code` también cuando la sesión se restaura desde almacenamiento local (cookie/cache del navegador), sin requerir login manual.
+- `AuthManager` ahora notifica al backend en la restauración de sesión para consolidar el último acceso y guardar la fecha actualizada en `localStorage`.
+- El endpoint `PATCH /api/users` admite la bandera `touchAccess` para actualizar únicamente `ultimo_acceso_code` y devolverlo en la respuesta.
+
 ## v1.3.53 - 2026-02-13
 - Se actualiza automáticamente la columna `ultimo_acceso_code` en la tabla `users` al iniciar sesión en la app.
 - El endpoint de login devuelve el usuario con la fecha de último acceso consolidada en la misma respuesta.

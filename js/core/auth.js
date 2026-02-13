@@ -73,9 +73,34 @@ const AuthManager = {
             if (parsed && parsed.id && parsed.name) {
                 this.user = parsed;
                 this.isLocked = false;
+                this.registerSessionAccess();
             }
         } catch (error) {
             console.error("Error leyendo usuario guardado", error);
+        }
+    },
+
+    async registerSessionAccess() {
+        if (!this.user?.id) return;
+        try {
+            const response = await fetch("/api/users", {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    id: this.user.id,
+                    touchAccess: true
+                })
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (data?.ultimo_acceso_code) {
+                this.user = { ...this.user, ultimo_acceso_code: data.ultimo_acceso_code };
+                localStorage.setItem("gcUser", JSON.stringify(this.user));
+            }
+        } catch (error) {
+            console.error("No se pudo registrar ultimo acceso de sesión restaurada", error);
         }
     },
 
