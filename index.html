@@ -11,7 +11,7 @@
     <!-- PANEL IZQUIERDO -->
     <div id="leftPanel">
         <h2>Editor Markdown</h2>
-        <div class="app-version">v1.3.51</div>
+        <div class="app-version">v1.3.52</div>
 
         <div class="user-accordion">
             <button class="accordion-toggle" id="userAccordionToggle" type="button" aria-expanded="false">
@@ -80,6 +80,20 @@
         <div class="project-name-bar">
             <label for="projectNameInput">Nombre del proyecto</label>
             <input id="projectNameInput" type="text" placeholder="Escribe el nombre del proyecto" />
+        </div>
+
+        <div class="template-name-bar">
+            <div class="template-name-field">
+                <label for="templateNameInput">Nombre de la plantilla activa</label>
+                <input id="templateNameInput" type="text" placeholder="Escribe el nombre de la plantilla" />
+            </div>
+            <div class="template-type-field">
+                <label for="templateTypeSelect">Tipo</label>
+                <select id="templateTypeSelect">
+                    <option value="Formulario">Formulario</option>
+                    <option value="Documento">Documento</option>
+                </select>
+            </div>
         </div>
 
         <!-- TOOLBAR SUPERIOR -->

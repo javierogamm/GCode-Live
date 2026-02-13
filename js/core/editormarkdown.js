@@ -15,6 +15,8 @@ const btnGuardarProyecto = document.getElementById("btnGuardarProyecto");
 const btnCargarProyecto = document.getElementById("btnCargarProyecto");
 const btnExportCsv = document.getElementById("btnExportCsv");
 const projectNameInput = document.getElementById("projectNameInput");
+const templateNameInput = document.getElementById("templateNameInput");
+const templateTypeSelect = document.getElementById("templateTypeSelect");
 
 function getCurrentAuthUserName() {
     const stored = localStorage.getItem("gcUser");
@@ -153,6 +155,19 @@ const projectState = {
     activeTemplateId: null
 };
 
+const TEMPLATE_TYPES = ["Formulario", "Documento"];
+
+const normalizeTemplateType = (value) => TEMPLATE_TYPES.includes(value) ? value : "Documento";
+
+const composePlantillaResumen = () => projectState.templates
+    .map((tpl) => {
+        const name = (tpl.name || "").trim();
+        if (!name) return "";
+        return `${name} (${normalizeTemplateType(tpl.type)})`;
+    })
+    .filter(Boolean)
+    .join(", ");
+
 const templateManagerState = {
     modal: null
 };
@@ -199,12 +214,14 @@ const setTemplates = (templates = [], activeName = "") => {
     projectState.templates = templates.map((tpl) => ({
         id: tpl.id || createTemplateId(),
         name: tpl.name || tpl.nombre || "Plantilla",
+        type: normalizeTemplateType(tpl.type || tpl.tipo),
         markdown: typeof tpl.markdown === "string" ? tpl.markdown : ""
     }));
     if (!projectState.templates.length) {
         const fallback = {
             id: createTemplateId(),
             name: "Plantilla 1",
+            type: "Documento",
             markdown: markdownText ? markdownText.value || "" : ""
         };
         projectState.templates = [fallback];
@@ -219,13 +236,15 @@ const setTemplates = (templates = [], activeName = "") => {
         }
         updateLineNumbers();
     }
+    renderActiveTemplateDetails();
 };
 
-const addTemplate = (name, markdown = "") => {
+const addTemplate = (name, markdown = "", type = "Documento") => {
     const finalName = getUniqueTemplateName(name);
     const template = {
         id: createTemplateId(),
         name: finalName,
+        type: normalizeTemplateType(type),
         markdown
     };
     projectState.templates.push(template);
@@ -236,7 +255,18 @@ const addTemplate = (name, markdown = "") => {
         updateHighlight();
         updateLineNumbers();
     }
+    renderActiveTemplateDetails();
     return template;
+};
+
+const renderActiveTemplateDetails = () => {
+    const active = getActiveTemplate();
+    if (templateNameInput) {
+        templateNameInput.value = active ? active.name || "" : "";
+    }
+    if (templateTypeSelect) {
+        templateTypeSelect.value = normalizeTemplateType(active ? active.type : "Documento");
+    }
 };
 
 const applyProjectData = (data) => {
@@ -254,6 +284,7 @@ const applyProjectData = (data) => {
     } else if (Array.isArray(plantillas)) {
         const mapped = plantillas.map((tpl, index) => ({
             name: tpl.nombre || tpl.name || `Plantilla ${index + 1}`,
+            type: tpl.tipo || tpl.type || "Documento",
             markdown: tpl.markdown || ""
         }));
         setTemplates(mapped, proyecto.plantillaActiva || data.plantillaActiva || "");
@@ -292,6 +323,10 @@ function ensureTemplateManagerModal() {
                 <div id="templateManagerList" class="template-list"></div>
                 <div class="template-create-row">
                     <input id="templateManagerNameInput" type="text" placeholder="Nombre de la nueva plantilla" />
+                    <select id="templateManagerTypeSelect">
+                        <option value="Formulario">Formulario</option>
+                        <option value="Documento" selected>Documento</option>
+                    </select>
                     <button type="button" data-action="create-template">Añadir plantilla</button>
                 </div>
             </div>
@@ -302,6 +337,7 @@ function ensureTemplateManagerModal() {
     const closeBtn = modal.querySelector(".modal-close");
     const list = modal.querySelector("#templateManagerList");
     const nameInput = modal.querySelector("#templateManagerNameInput");
+    const typeSelect = modal.querySelector("#templateManagerTypeSelect");
     const createBtn = modal.querySelector("[data-action='create-template']");
 
     const render = () => {
@@ -315,7 +351,7 @@ function ensureTemplateManagerModal() {
             const row = document.createElement("div");
             row.className = "template-item" + (tpl.id === projectState.activeTemplateId ? " active" : "");
             const name = document.createElement("span");
-            name.textContent = tpl.name;
+            name.textContent = `${tpl.name} (${normalizeTemplateType(tpl.type)})`;
             const btn = document.createElement("button");
             btn.type = "button";
             btn.textContent = "Usar";
@@ -328,6 +364,7 @@ function ensureTemplateManagerModal() {
                     updateHighlight();
                     updateLineNumbers();
                 }
+                renderActiveTemplateDetails();
                 render();
                 modal.style.display = "none";
             });
@@ -339,16 +376,19 @@ function ensureTemplateManagerModal() {
 
     const handleCreate = () => {
         const value = nameInput ? nameInput.value.trim() : "";
+        const type = typeSelect ? typeSelect.value : "Documento";
         if (!value) return;
         syncActiveTemplateMarkdown();
-        const template = addTemplate(value, "");
+        const template = addTemplate(value, "", type);
         if (nameInput) nameInput.value = "";
+        if (typeSelect) typeSelect.value = "Documento";
         if (markdownText) {
             markdownText.value = template.markdown;
             resetUndoStacks(markdownText.value);
             updateHighlight();
             updateLineNumbers();
         }
+        renderActiveTemplateDetails();
         render();
         modal.style.display = "none";
     };
@@ -429,6 +469,26 @@ if (projectNameInput) {
         setProjectName(value);
     });
 }
+if (templateNameInput) {
+    templateNameInput.addEventListener("input", (event) => {
+        const active = getActiveTemplate();
+        if (!active) return;
+        active.name = (event.target ? event.target.value : "").trim() || "Plantilla";
+        if (saveProjectState.modal && saveProjectState.modal.style.display === "flex" && typeof saveProjectState.modal.renderLocalTemplates === "function") {
+            saveProjectState.modal.renderLocalTemplates();
+        }
+    });
+}
+if (templateTypeSelect) {
+    templateTypeSelect.addEventListener("change", (event) => {
+        const active = getActiveTemplate();
+        if (!active) return;
+        active.type = normalizeTemplateType(event.target ? event.target.value : "Documento");
+        if (saveProjectState.modal && saveProjectState.modal.style.display === "flex" && typeof saveProjectState.modal.renderLocalTemplates === "function") {
+            saveProjectState.modal.renderLocalTemplates();
+        }
+    });
+}
 if (btnExportProyecto) {
     btnExportProyecto.addEventListener("click", () => {
         syncActiveTemplateMarkdown();
@@ -444,6 +504,7 @@ if (btnExportProyecto) {
                 nombre: projectName,
                 plantillas: projectState.templates.map((tpl) => ({
                     nombre: tpl.name,
+                    tipo: normalizeTemplateType(tpl.type),
                     markdown: tpl.markdown
                 })),
                 plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
@@ -482,6 +543,7 @@ if (btnImportProyecto) {
 
                     // 1) Restaurar markdown
                     applyProjectData(data);
+                    saveProjectState.loadedProject = null;
 
                     alert("✔ Proyecto importado correctamente.");
                 } catch (err) {
@@ -501,7 +563,8 @@ const saveProjectState = {
     modal: null,
     subfunciones: [],
     activeSubfuncion: "",
-    projects: []
+    projects: [],
+    loadedProject: null
 };
 
 function ensureSaveProjectModal() {
@@ -596,7 +659,7 @@ function ensureSaveProjectModal() {
             const row = document.createElement("div");
             row.className = "save-project-item";
             const name = document.createElement("span");
-            name.textContent = tpl.name || "Sin nombre";
+            name.textContent = `${tpl.name || "Sin nombre"} (${normalizeTemplateType(tpl.type)})`;
             const button = document.createElement("button");
             button.type = "button";
             button.className = "save-project-use-btn";
@@ -779,6 +842,7 @@ function ensureSaveProjectModal() {
                 nombre: proyectoNombre,
                 plantillas: projectState.templates.map((tpl) => ({
                     nombre: tpl.name,
+                    tipo: normalizeTemplateType(tpl.type),
                     markdown: tpl.markdown
                 })),
                 plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
@@ -787,10 +851,7 @@ function ensureSaveProjectModal() {
         };
 
         try {
-            const plantillaResumen = projectState.templates
-                .map((tpl) => tpl.name)
-                .filter(Boolean)
-                .join(", ");
+            const plantillaResumen = composePlantillaResumen();
             setStatus(overwrite ? "Sobrescribiendo proyecto..." : "Guardando proyecto...", false);
             const response = await fetch("/api/projects", {
                 method: "POST",
@@ -825,7 +886,19 @@ function ensureSaveProjectModal() {
                 }
                 throw new Error("Error al guardar el proyecto.");
             }
+            let savedData = null;
+            try {
+                savedData = await response.json();
+            } catch (error) {
+                savedData = null;
+            }
             saveProjectState.activeSubfuncion = subfuncionNombre;
+            saveProjectState.loadedProject = {
+                id: savedData?.id || saveProjectState.loadedProject?.id || null,
+                proyecto: proyectoNombre,
+                subfuncion: subfuncionNombre,
+                user: currentUser
+            };
             setStatus(overwrite ? "Proyecto sobrescrito correctamente." : "Proyecto guardado correctamente.", false);
             renderLocalTemplates();
             await loadSubfunciones();
@@ -850,8 +923,36 @@ function ensureSaveProjectModal() {
     });
 
     if (saveBtn) {
-        saveBtn.addEventListener("click", () => {
-            saveProject(false);
+        saveBtn.addEventListener("click", async () => {
+            const proyectoNombre = projectInput ? projectInput.value.trim() : "";
+            const loadedProjectName = saveProjectState.loadedProject?.proyecto || "";
+            const loadedProjectOwner = saveProjectState.loadedProject?.user || "";
+            const currentUser = getCurrentAuthUserName();
+            const canOverwriteLoaded = loadedProjectName
+                && proyectoNombre
+                && proyectoNombre === loadedProjectName
+                && currentUser
+                && loadedProjectOwner
+                && currentUser === loadedProjectOwner;
+
+            if (!canOverwriteLoaded) {
+                await saveProject(false);
+                return;
+            }
+
+            const overwrite = window.confirm(`Has cargado desde BDD el proyecto "${loadedProjectName}". ¿Sobrescribir?`);
+            if (overwrite) {
+                await saveProject(true);
+                return;
+            }
+
+            const suggestedName = `${loadedProjectName} copia`;
+            if (projectInput) {
+                projectInput.value = suggestedName;
+                projectInput.focus();
+                projectInput.select();
+            }
+            setStatus("Indica un nuevo nombre de proyecto y vuelve a guardar.", false);
         });
     }
 
@@ -885,10 +986,10 @@ if (btnGuardarProyecto) {
         const projectInput = modal.querySelector("#saveProjectProjectInput");
         const subfuncionInput = modal.querySelector("#saveProjectSubfuncionInput");
         if (projectInput) {
-            projectInput.value = projectState.name || "";
+            projectInput.value = projectState.name || saveProjectState.loadedProject?.proyecto || "";
         }
         if (subfuncionInput) {
-            subfuncionInput.value = saveProjectState.activeSubfuncion || "";
+            subfuncionInput.value = saveProjectState.activeSubfuncion || saveProjectState.loadedProject?.subfuncion || "";
         }
         modal.style.display = "flex";
         if (typeof modal.renderLocalTemplates === "function") {
@@ -1015,6 +1116,7 @@ function ensureLoadProjectModal() {
                 nombre: project.proyecto || projectState.name || "",
                 plantillas: projectState.templates.map((tpl) => ({
                     nombre: tpl.name,
+                    tipo: normalizeTemplateType(tpl.type),
                     markdown: tpl.markdown
                 })),
                 plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
@@ -1024,10 +1126,7 @@ function ensureLoadProjectModal() {
 
         try {
             setStatus("Sobrescribiendo proyecto...", false);
-            const plantillaResumen = projectState.templates
-                .map((tpl) => tpl.name)
-                .filter(Boolean)
-                .join(", ");
+            const plantillaResumen = composePlantillaResumen();
             const response = await fetch("/api/projects", {
                 method: "POST",
                 headers: {
@@ -1128,6 +1227,13 @@ function ensureLoadProjectModal() {
                         throw new Error("Proyecto inválido.");
                     }
                     applyProjectData(payload);
+                    saveProjectState.loadedProject = {
+                        id: project.id || null,
+                        proyecto: project.proyecto || "",
+                        subfuncion: project.subfuncion || "",
+                        user: project.user || ""
+                    };
+                    saveProjectState.activeSubfuncion = project.subfuncion || "";
                     setStatus("Proyecto cargado correctamente.", false);
                     modal.style.display = "none";
                 } catch (error) {
@@ -2436,6 +2542,7 @@ if (btnExportCsv) {
 
 btnNuevo.addEventListener("click", () => {
     markdownText.value = "";
+    saveProjectState.loadedProject = null;
     pushUndoState();
     updateHighlight();
 });
