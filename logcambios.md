@@ -1,5 +1,9 @@
 # Log de cambios
 
+## v1.3.53 - 2026-02-13
+- Se actualiza automáticamente la columna `ultimo_acceso_code` en la tabla `users` al iniciar sesión en la app.
+- El endpoint de login devuelve el usuario con la fecha de último acceso consolidada en la misma respuesta.
+
 ## v1.3.52 - 2026-02-13
 - Al guardar un proyecto cargado desde BDD ahora se pregunta primero si se desea sobrescribir; si se rechaza, se propone guardar como nuevo proyecto con nombre editable.
 - Se añadió una barra sobre el editor para ver y editar en cualquier momento el nombre y tipo de la plantilla activa.

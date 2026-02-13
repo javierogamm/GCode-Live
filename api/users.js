@@ -22,7 +22,26 @@ module.exports = async (req, res) => {
         res.status(401).json({ error: "Invalid credentials" });
         return;
       }
-      res.status(200).json(data[0]);
+      const accessDate = new Date().toISOString();
+      const updateQuery = `?id=eq.${encodeURIComponent(
+        data[0].id
+      )}&select=id,name,admin,ultimo_acceso_code`;
+      const updateResponse = await supabaseFetch("users", {
+        method: "PATCH",
+        body: { ultimo_acceso_code: accessDate },
+        query: updateQuery,
+        prefer: "return=representation"
+      });
+
+      if (!updateResponse.ok) {
+        const detail = await updateResponse.text();
+        console.error("No se pudo actualizar ultimo_acceso_code:", detail);
+        res.status(200).json({ ...data[0], ultimo_acceso_code: accessDate });
+        return;
+      }
+
+      const updated = await updateResponse.json();
+      res.status(200).json(updated[0] || { ...data[0], ultimo_acceso_code: accessDate });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Supabase env vars missing or request failed" });
