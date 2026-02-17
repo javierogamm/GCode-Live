@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.58 - 2026-02-17
+- En la validación de tesauros configurados, la consolidación final ahora **solo** crea/actualiza tesauros del copypaste que sean coincidentes por referencia con los detectados en el proyecto.
+- Los tesauros coincidentes se consolidan con las características del copypaste (nombre, tipo, momento y agrupación), dejando fuera los no coincidentes.
+- Si un tesauro coincidente es de tipo selector, ahora es obligatorio completar su copypaste de valores antes de poder aplicar la validación.
+- Se actualizó la versión visible de la app a `v1.3.58` y la versión del proyecto en `package.json` a `1.3.58`.
+
 ## v1.3.57 - 2026-02-17
 - En la validación de tesauros configurados, la consolidación final ahora incorpora **todos los tesauros del copypaste** al proyecto: actualiza por referencia si ya existen y crea los que faltan, para selectores y demás tipologías.
 - Si hay coincidencias de referencia de tipo selector, el flujo sigue solicitando el copypaste de sus valores antes de la fase final y usa esos valores en la consolidación.
