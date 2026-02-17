@@ -1447,20 +1447,20 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
         if (step === 5) {
             const selectorCount = Object.keys(state.selectorValuesByRef).length;
             const matchesCount = state.matches.length;
-            const pastedCount = state.pastedTesauros.length;
+            const matchedPasteCount = state.matches.filter(m => m?.pasted?.ref).length;
             container.innerHTML = `
                 <h3 style="margin:0;">5. Resumen y actualización</h3>
                 <ul style="margin:0; padding-left:18px; color:#1f2937; font-size:14px;">
                     <li>Tesauros coincidentes por referencia: <b>${matchesCount}</b>.</li>
-                    <li>Tesauros del copypaste a consolidar en el proyecto: <b>${pastedCount}</b>.</li>
+                    <li>Tesauros del copypaste que se consolidarán (solo coincidentes): <b>${matchedPasteCount}</b>.</li>
                     <li>Selectores validados con valores pegados: <b>${selectorCount}</b>.</li>
                 </ul>
                 <p style="margin:0; color:#475569; font-size:13px;">
-                    Se consolidarán en el proyecto todos los tesauros del copypaste (creando los que no existan y actualizando los que ya existan por referencia). En coincidencias de selectores, se usarán los valores pegados en el paso 4.
+                    Se consolidarán en el proyecto únicamente los tesauros del copypaste que tengan coincidencia por referencia con los detectados en el proyecto (creando los que no existan y actualizando los que ya existan). En coincidencias de selectores, se usarán los valores pegados en el paso 4.
                 </p>
                 <div style="display:flex; justify-content:space-between; gap:8px;">
                     <button id="tmValidationClose2" style="padding:10px 14px; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer;">Cancelar</button>
-                    <button id="tmValidationApply" style="padding:10px 14px; background:#10b981; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;" ${pastedCount ? "" : "disabled"}>Aplicar actualización</button>
+                    <button id="tmValidationApply" style="padding:10px 14px; background:#10b981; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;" ${matchedPasteCount ? "" : "disabled"}>Aplicar actualización</button>
                 </div>
             `;
 
@@ -1563,8 +1563,8 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
 
     applyProjectTesauroValidation() {
         const state = this.projectValidationState;
-        if (!state?.pastedTesauros?.length) {
-            alert("No hay tesauros de copypaste para consolidar.");
+        if (!state?.matches?.length) {
+            alert("No hay tesauros coincidentes para consolidar.");
             return;
         }
 
@@ -1581,12 +1581,41 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
             ])
         );
 
+        const matchedTesauros = state.matches
+            .map(match => match?.pasted)
+            .filter(item => item?.ref);
+
+        if (!matchedTesauros.length) {
+            alert("No hay tesauros coincidentes del copypaste para consolidar.");
+            return;
+        }
+
+        const selectorMatches = state.matches.filter((match) => {
+            const tipo = match?.pasted?.tipo || match?.project?.tipo;
+            return this.normalizeTextForMatch(tipo) === "selector";
+        });
+
+        const missingSelectorValues = selectorMatches.filter((match) => {
+            const opciones = state.selectorValuesByRef[match.ref];
+            return !Array.isArray(opciones) || !opciones.length;
+        });
+
+        if (missingSelectorValues.length) {
+            state.selectorsQueue = missingSelectorValues.map(match => ({
+                ref: match.ref,
+                nombre: match?.pasted?.nombre || match?.project?.nombre || match.ref
+            }));
+            alert("❌ Debes pegar los valores de todos los selectores coincidentes antes de aplicar.");
+            this.openProjectValidationSelectorModal();
+            return;
+        }
+
         let created = 0;
         let updated = 0;
         let selectorsUpdated = 0;
         let selectorsCreated = 0;
 
-        state.pastedTesauros.forEach((pasted) => {
+        matchedTesauros.forEach((pasted) => {
             const key = (pasted.ref || "").toLowerCase();
             if (!key) return;
 
@@ -1648,7 +1677,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
             DataTesauro.render();
         }
 
-        alert(`✅ Validación aplicada: ${created} creados, ${updated} actualizados, ${selectorsUpdated} selectores actualizados con valores y ${selectorsCreated} selectores creados con valores.`);
+        alert(`✅ Validación aplicada: ${created} creados, ${updated} actualizados, ${selectorsUpdated} selectores actualizados con valores y ${selectorsCreated} selectores creados con valores (solo coincidencias por referencia).`);
         this.projectValidationModal.style.display = "none";
         this.projectValidationState = null;
     },
