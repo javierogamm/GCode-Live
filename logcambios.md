@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.56 - 2026-02-17
+- Se corrigió la validación de tesauros configurados para detectar coincidencias **por referencia** aunque nombre/tipo difieran.
+- El paso de revisión ahora distingue entre coincidencia completa (referencia+nombre+tipo) y coincidencia solo por referencia para evitar falsos negativos.
+- Al aplicar la validación se actualizan también `momento` y `agrupacion` desde el copypaste para los tesauros coincidentes por referencia, y en selectores se mantienen los valores validados del paso 4.
+
 ## v1.3.55 - 2026-02-17
 - Se añadió el botón lateral **"Validar tesauros configurados"** debajo de Exportar CSV para abrir un flujo dedicado de validación.
 - El nuevo modal (ancho) detecta tesauros en **todos los markdowns/plantillas del proyecto**, los muestra en tabla y solicita el copypaste para cruzar coincidencias por referencia, nombre y tipo.

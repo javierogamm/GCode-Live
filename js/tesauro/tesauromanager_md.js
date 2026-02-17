@@ -1305,18 +1305,20 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
 
             const sameName = this.normalizeTextForMatch(projectItem.nombre) === this.normalizeTextForMatch(pasted.nombre);
             const sameType = this.normalizeTextForMatch(projectItem.tipo) === this.normalizeTextForMatch(pasted.tipo);
-            if (!sameName || !sameType) return;
 
             matches.push({
                 ref: projectItem.ref,
                 project: projectItem,
-                pasted
+                pasted,
+                sameName,
+                sameType,
+                fullMatch: sameName && sameType
             });
         });
 
         state.matches = matches;
         state.selectorsQueue = matches
-            .filter(m => this.normalizeTextForMatch(m.project.tipo) === "selector")
+            .filter(m => this.normalizeTextForMatch(m.pasted.tipo || m.project.tipo) === "selector")
             .map(m => ({ ref: m.ref, nombre: m.pasted.nombre || m.project.nombre || m.ref }));
         return matches;
     },
@@ -1398,25 +1400,32 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
         }
 
         if (step === 3) {
-            const matchedSet = new Set(state.matches.map(m => m.ref.toLowerCase()));
+            const matchedByRef = new Map(state.matches.map(m => [m.ref.toLowerCase(), m]));
             const rows = state.projectTesauros.map(item => {
                 const key = (item.ref || "").toLowerCase();
-                const isMatch = matchedSet.has(key);
-                const pasted = isMatch ? state.matches.find(m => m.ref.toLowerCase() === key)?.pasted : null;
+                const match = matchedByRef.get(key);
+                const hasRefMatch = !!match;
+                const fullMatch = !!match?.fullMatch;
+                const bg = fullMatch ? "#dcfce7" : (hasRefMatch ? "#fef9c3" : "#fff7ed");
+                const estado = fullMatch
+                    ? "✅ Ref+Nombre+Tipo"
+                    : (hasRefMatch ? "⚠️ Coincide referencia" : "❌ No coincide");
                 return `
-                    <tr style="background:${isMatch ? "#ecfdf5" : "#fff7ed"};">
+                    <tr style="background:${bg};">
                         <td style="padding:7px; border:1px solid #e2e8f0;">${this.escapeAttr(item.ref)}</td>
                         <td style="padding:7px; border:1px solid #e2e8f0;">${this.escapeAttr(item.nombre || "-")}</td>
                         <td style="padding:7px; border:1px solid #e2e8f0;">${this.escapeAttr(item.tipo || "-")}</td>
-                        <td style="padding:7px; border:1px solid #e2e8f0;">${isMatch ? "✅ Coincide" : "❌ No coincide"}</td>
-                        <td style="padding:7px; border:1px solid #e2e8f0;">${this.escapeAttr(pasted?.nombre || "-")}</td>
+                        <td style="padding:7px; border:1px solid #e2e8f0;">${estado}</td>
+                        <td style="padding:7px; border:1px solid #e2e8f0;">${this.escapeAttr(match?.pasted?.nombre || "-")}</td>
                     </tr>
                 `;
             }).join("");
 
+            const fullMatches = state.matches.filter(m => m.fullMatch).length;
+            const refMatches = state.matches.length;
             container.innerHTML = `
-                <h3 style="margin:0;">3. Coincidencias por referencia + nombre + tipo</h3>
-                <p style="margin:0; color:#475569; font-size:13px;">Coincidencias: <b>${state.matches.length}</b> de <b>${state.projectTesauros.length}</b>.</p>
+                <h3 style="margin:0;">3. Coincidencias detectadas</h3>
+                <p style="margin:0; color:#475569; font-size:13px;">Coincidencias por referencia: <b>${refMatches}</b>. Coincidencias completas (referencia+nombre+tipo): <b>${fullMatches}</b>.</p>
                 ${tableHtml(rows, '<th style="padding:8px; border:1px solid #e2e8f0;">Estado</th><th style="padding:8px; border:1px solid #e2e8f0;">Nombre copypaste</th>')}
                 <div style="display:flex; justify-content:space-between; gap:8px;">
                     <button id="tmValidationBack2" style="padding:10px 14px; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer;">Atrás</button>
@@ -1449,7 +1458,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                     <li>Selectores validados con valores pegados: <b>${selectorCount}</b>.</li>
                 </ul>
                 <p style="margin:0; color:#475569; font-size:13px;">
-                    Se actualizarán los tesauros del proyecto que coinciden con el copypaste (nombre y tipo). Si son selectores, se sobrescriben sus valores.
+                    Se actualizarán los tesauros del proyecto que coinciden por referencia con el copypaste. Además, se conservará en el resumen si nombre/tipo coincidían totalmente. Si son selectores, se sobrescriben sus valores.
                 </p>
                 <div style="display:flex; justify-content:space-between; gap:8px;">
                     <button id="tmValidationClose2" style="padding:10px 14px; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer;">Cancelar</button>
@@ -1576,6 +1585,8 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
 
             target.nombre = match.pasted.nombre;
             target.tipo = match.pasted.tipo;
+            target.momento = match.pasted.momento || target.momento || "Solicitud";
+            target.agrupacion = match.pasted.agrupacion || target.agrupacion || "Agrupación";
             updated += 1;
 
             if (this.normalizeTextForMatch(target.tipo) === "selector") {
