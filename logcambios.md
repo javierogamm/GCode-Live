@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.55 - 2026-02-17
+- Se añadió el botón lateral **"Validar tesauros configurados"** debajo de Exportar CSV para abrir un flujo dedicado de validación.
+- El nuevo modal (ancho) detecta tesauros en **todos los markdowns/plantillas del proyecto**, los muestra en tabla y solicita el copypaste para cruzar coincidencias por referencia, nombre y tipo.
+- Si hay coincidencias de tipo selector, el flujo pide el pegado de valores por selector, valida sus referencias/valores y consolida el resultado.
+- Al confirmar, se actualizan en el proyecto los tesauros coincidentes (nombre/tipo) y los valores de selector capturados desde el copypaste.
+
 ## v1.3.54 - 2026-02-13
 - Se registra `ultimo_acceso_code` también cuando la sesión se restaura desde almacenamiento local (cookie/cache del navegador), sin requerir login manual.
 - `AuthManager` ahora notifica al backend en la restauración de sesión para consolidar el último acceso y guardar la fecha actualizada en `localStorage`.

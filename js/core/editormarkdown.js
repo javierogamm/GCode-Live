@@ -14,6 +14,7 @@ const btnImportProyecto = document.getElementById("btnImportProyecto");
 const btnGuardarProyecto = document.getElementById("btnGuardarProyecto");
 const btnCargarProyecto = document.getElementById("btnCargarProyecto");
 const btnExportCsv = document.getElementById("btnExportCsv");
+const btnValidarTesauros = document.getElementById("btnValidarTesauros");
 const projectNameInput = document.getElementById("projectNameInput");
 const templateNameInput = document.getElementById("templateNameInput");
 const templateTypeSelect = document.getElementById("templateTypeSelect");
@@ -181,6 +182,16 @@ const syncActiveTemplateMarkdown = () => {
     if (active && markdownText) {
         active.markdown = markdownText.value || "";
     }
+};
+
+window.getProjectTemplatesSnapshot = () => {
+    syncActiveTemplateMarkdown();
+    return (projectState.templates || []).map((tpl) => ({
+        id: tpl.id,
+        name: tpl.name || "",
+        type: normalizeTemplateType(tpl.type || "Documento"),
+        markdown: typeof tpl.markdown === "string" ? tpl.markdown : ""
+    }));
 };
 
 const resetUndoStacks = (value) => {
@@ -2537,6 +2548,16 @@ function openCsvExportModal() {
 if (btnExportCsv) {
     btnExportCsv.addEventListener("click", () => {
         openCsvExportModal();
+    });
+}
+
+if (btnValidarTesauros) {
+    btnValidarTesauros.addEventListener("click", () => {
+        if (window.TesauroManager && typeof TesauroManager.openProjectTesauroValidationModal === "function") {
+            TesauroManager.openProjectTesauroValidationModal();
+            return;
+        }
+        alert("El gestor de tesauros no está disponible ahora mismo.");
     });
 }
 
