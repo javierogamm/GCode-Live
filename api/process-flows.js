@@ -90,8 +90,8 @@ async function syncFlowWithCode(req, res) {
 
   const flowBody = { sync_code: syncCode };
   if (flowJson !== undefined) {
-    flowBody.json = flowJson;
-    pushLog(logs, "flow_payload", "Se incluye json de flow para consolidar plantillas");
+    flowBody.flow = flowJson;
+    pushLog(logs, "flow_payload", "Se incluye payload en columna flow para consolidar plantillas");
   }
   if (typeof plantilla === "string") {
     flowBody.plantilla = plantilla;

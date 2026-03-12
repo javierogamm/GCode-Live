@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.68 - 2026-03-12
+- Se corrigió la sincronización con `Process_Flows` para escribir el payload en la columna correcta `flow` (antes se intentaba usar `json`, que no existe en esa tabla).
+- El endpoint `api/process-flows` mantiene el flujo de logs y ahora registra explícitamente que consolida plantillas en la columna `flow`.
+- Se actualizó la versión visible de la app a `v1.3.68` y la versión del proyecto en `package.json` a `1.3.68`.
+
 ## v1.3.67 - 2026-03-12
 - Se reforzó la sincronización de plantillas para insertar/crear estructura en el JSON del flow: además de `plantillas`, ahora se consolida `fichaProyecto.plantillas` y se actualizan campos de nodo (`plantillaTexto` y `data.plantilla` cuando aplica).
 - Se añadió trazabilidad de intentos y errores de sincronización con un log persistente en navegador (`localStorage`, clave `gcSyncLog`) y helper `window.getSyncLog()` para revisión de causas.
