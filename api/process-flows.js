@@ -24,16 +24,93 @@ async function getNextSyncCode() {
   return String(maxCode + 1);
 }
 
+async function syncFlowWithCode(req, res) {
+  const { flowId, projectId, assignSyncCode, flowJson, plantilla } = req.body || {};
+  const normalizedFlowId = typeof flowId === "string" ? flowId.trim() : String(flowId || "").trim();
+  const normalizedProjectId = typeof projectId === "string" ? projectId.trim() : String(projectId || "").trim();
+
+  if (!normalizedFlowId || !normalizedProjectId) {
+    res.status(400).json({ error: "Missing flowId or projectId" });
+    return;
+  }
+
+  let syncCode = typeof assignSyncCode === "string" && assignSyncCode.trim()
+    ? assignSyncCode.trim()
+    : "";
+  if (!syncCode) {
+    syncCode = await getNextSyncCode();
+  }
+
+  const patchProject = await supabaseFetch("Code_Markdowns", {
+    method: "PATCH",
+    body: { sync_code: syncCode },
+    query: `?id=eq.${encodeURIComponent(normalizedProjectId)}&select=id,sync_code`,
+    prefer: "return=representation"
+  });
+
+  if (!patchProject.ok) {
+    const detail = await patchProject.text();
+    res.status(patchProject.status).json({ error: detail || "Failed updating Code_Markdowns" });
+    return;
+  }
+
+  const patchBackup = await supabaseFetch("Code_Markdowns_BACKUP", {
+    method: "PATCH",
+    body: { sync_code: syncCode },
+    query: `?%22ID_Origen%22=eq.${encodeURIComponent(normalizedProjectId)}&select=id,sync_code`,
+    prefer: "return=representation"
+  });
+  if (!patchBackup.ok) {
+    const detail = await patchBackup.text();
+    res.status(patchBackup.status).json({ error: detail || "Failed updating Code_Markdowns_BACKUP" });
+    return;
+  }
+
+  const flowBody = { sync_code: syncCode };
+  if (flowJson !== undefined) {
+    flowBody.json = flowJson;
+  }
+  if (typeof plantilla === "string") {
+    flowBody.plantilla = plantilla;
+  }
+
+  const patchFlow = await supabaseFetch("Process_Flows", {
+    method: "PATCH",
+    body: flowBody,
+    query: `?id=eq.${encodeURIComponent(normalizedFlowId)}&select=id,sync_code`,
+    prefer: "return=representation"
+  });
+  if (!patchFlow.ok) {
+    const detail = await patchFlow.text();
+    res.status(patchFlow.status).json({ error: detail || "Failed updating Process_Flows" });
+    return;
+  }
+
+  const projectRows = await patchProject.json();
+  const backupRows = await patchBackup.json();
+  const flowRows = await patchFlow.json();
+
+  res.status(200).json({
+    sync_code: syncCode,
+    code_markdowns: Array.isArray(projectRows) ? projectRows[0] || null : projectRows,
+    backups_updated: Array.isArray(backupRows) ? backupRows.length : 0,
+    process_flow: Array.isArray(flowRows) ? flowRows[0] || null : flowRows
+  });
+}
+
 module.exports = async (req, res) => {
   if (req.method === "GET") {
     try {
-      const { subfuncion, id } = req.query || {};
+      const { subfuncion, id, sync_code } = req.query || {};
       const filters = ["select=*"];
       if (id) {
         filters.push(`id=eq.${encodeURIComponent(id)}`);
       }
       if (subfuncion) {
         filters.push(`subfuncion=eq.${encodeURIComponent(subfuncion)}`);
+      }
+      if (sync_code) {
+        filters.push(`sync_code=eq.${encodeURIComponent(sync_code)}`);
       }
       filters.push("order=created_at.desc");
 
@@ -57,79 +134,9 @@ module.exports = async (req, res) => {
     return;
   }
 
-  if (req.method === "PATCH") {
+  if (req.method === "PATCH" || req.method === "POST") {
     try {
-      const { flowId, projectId, assignSyncCode, flowJson, plantilla } = req.body || {};
-      const normalizedFlowId = typeof flowId === "string" ? flowId.trim() : String(flowId || "").trim();
-      const normalizedProjectId = typeof projectId === "string" ? projectId.trim() : String(projectId || "").trim();
-
-      if (!normalizedFlowId || !normalizedProjectId) {
-        res.status(400).json({ error: "Missing flowId or projectId" });
-        return;
-      }
-
-      let syncCode = typeof assignSyncCode === "string" && assignSyncCode.trim()
-        ? assignSyncCode.trim()
-        : "";
-      if (!syncCode) {
-        syncCode = await getNextSyncCode();
-      }
-
-      const patchProject = await supabaseFetch("Code_Markdowns", {
-        method: "PATCH",
-        body: { sync_code: syncCode },
-        query: `?id=eq.${encodeURIComponent(normalizedProjectId)}&select=id,sync_code`,
-        prefer: "return=representation"
-      });
-
-      if (!patchProject.ok) {
-        const detail = await patchProject.text();
-        res.status(patchProject.status).json({ error: detail || "Failed updating Code_Markdowns" });
-        return;
-      }
-
-      const patchBackup = await supabaseFetch("Code_Markdowns_BACKUP", {
-        method: "PATCH",
-        body: { sync_code: syncCode },
-        query: `?%22ID_Origen%22=eq.${encodeURIComponent(normalizedProjectId)}&select=id,sync_code`,
-        prefer: "return=representation"
-      });
-      if (!patchBackup.ok) {
-        const detail = await patchBackup.text();
-        res.status(patchBackup.status).json({ error: detail || "Failed updating Code_Markdowns_BACKUP" });
-        return;
-      }
-
-      const flowBody = { sync_code: syncCode };
-      if (flowJson !== undefined) {
-        flowBody.json = flowJson;
-      }
-      if (typeof plantilla === "string") {
-        flowBody.plantilla = plantilla;
-      }
-
-      const patchFlow = await supabaseFetch("Process_Flows", {
-        method: "PATCH",
-        body: flowBody,
-        query: `?id=eq.${encodeURIComponent(normalizedFlowId)}&select=id,sync_code`,
-        prefer: "return=representation"
-      });
-      if (!patchFlow.ok) {
-        const detail = await patchFlow.text();
-        res.status(patchFlow.status).json({ error: detail || "Failed updating Process_Flows" });
-        return;
-      }
-
-      const projectRows = await patchProject.json();
-      const backupRows = await patchBackup.json();
-      const flowRows = await patchFlow.json();
-
-      res.status(200).json({
-        sync_code: syncCode,
-        code_markdowns: Array.isArray(projectRows) ? projectRows[0] || null : projectRows,
-        backups_updated: Array.isArray(backupRows) ? backupRows.length : 0,
-        process_flow: Array.isArray(flowRows) ? flowRows[0] || null : flowRows
-      });
+      await syncFlowWithCode(req, res);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Supabase env vars missing or request failed" });

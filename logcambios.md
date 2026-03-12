@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.66 - 2026-03-12
+- Se corrigió la acción del botón **"Sincronizar Code"** para evitar el error al invocar `api/process-flows`, usando una ruta compatible por `POST` en lugar de depender solo de `PATCH`.
+- La sincronización ahora puede resolver el flow por `sync_code` cuando no existe `linked_flow_id` en memoria (por ejemplo, tras recargar/cargar proyecto), evitando bloqueos por vínculo parcial.
+- El endpoint `api/process-flows` ahora acepta `POST` además de `PATCH` para vinculación/sincronización y permite filtrar por `sync_code` en `GET`.
+- Se actualizó la versión visible de la app a `v1.3.66` y la versión del proyecto en `package.json` a `1.3.66`.
+
 ## v1.3.65 - 2026-03-12
 - Se implementó el vínculo técnico por `sync_code` entre `Code_Markdowns`, `Code_Markdowns_BACKUP` y `Process_Flows` al vincular un proyecto con un flow.
 - La vinculación ahora asigna (o reutiliza) un código correlativo común y lo consolida en las tres tablas para mantener enlazados proyecto, flow e histórico de backups.

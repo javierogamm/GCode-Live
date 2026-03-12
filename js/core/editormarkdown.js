@@ -1548,7 +1548,7 @@ function ensureProcessLinkModal() {
         try {
             setStatus("Vinculando proyecto con Process...", false);
             const response = await fetch("/api/process-flows", {
-                method: "PATCH",
+                method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
@@ -1982,13 +1982,16 @@ if (btnSincronizarCode) {
         const syncCode = saveProjectState.loadedProject?.sync_code;
         const projectId = saveProjectState.loadedProject?.id;
 
-        if (!projectId || !linkedFlowId || !syncCode) {
+        if (!projectId || !syncCode) {
             alert("Este proyecto no está vinculado a un flow. Usa primero 'Vincular proyecto process'.");
             return;
         }
 
         try {
-            const flowResponse = await fetch(`/api/process-flows?id=${encodeURIComponent(linkedFlowId)}`);
+            const flowQuery = linkedFlowId
+                ? `id=${encodeURIComponent(linkedFlowId)}`
+                : `sync_code=${encodeURIComponent(syncCode)}`;
+            const flowResponse = await fetch(`/api/process-flows?${flowQuery}`);
             if (!flowResponse.ok) {
                 throw new Error("No se pudo cargar el flow vinculado");
             }
@@ -1996,6 +1999,10 @@ if (btnSincronizarCode) {
             const flow = Array.isArray(flowRows) ? flowRows[0] : null;
             if (!flow) {
                 throw new Error("Flow vinculado no encontrado");
+            }
+            const resolvedFlowId = flow?.id || linkedFlowId;
+            if (!resolvedFlowId) {
+                throw new Error("No se pudo resolver el flow a sincronizar");
             }
 
             const flowPayload = extractFlowPayload(flow);
@@ -2006,12 +2013,12 @@ if (btnSincronizarCode) {
             const nextFlowPayload = mergeTemplatesIntoFlowPayload(flowPayload, projectState.templates);
             const plantillaResumen = composePlantillaResumen();
             const syncResponse = await fetch("/api/process-flows", {
-                method: "PATCH",
+                method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    flowId: linkedFlowId,
+                    flowId: resolvedFlowId,
                     projectId,
                     assignSyncCode: syncCode,
                     flowJson: nextFlowPayload,
@@ -2023,6 +2030,11 @@ if (btnSincronizarCode) {
                 throw new Error("No se pudo sincronizar con Process");
             }
 
+            setLoadedProjectState({
+                ...saveProjectState.loadedProject,
+                linked_flow_id: resolvedFlowId,
+                linked_flow_name: getFlowDisplayName(flow)
+            });
             alert("Sincronización completada: las plantillas de Code se enviaron al flow vinculado.");
         } catch (error) {
             console.error(error);
