@@ -1114,18 +1114,72 @@ function ensureProjectHistoryModal() {
         try {
             const payload = typeof version?.json === "string" ? JSON.parse(version.json) : version?.json;
             if (!payload || typeof payload !== "object") throw new Error("Versión inválida");
+
+            const project = historyProjectState.currentProject || {};
+            const proyectoNombre = (project.proyecto || "").trim();
+            const currentUser = getCurrentAuthUserName();
+            if (!proyectoNombre || !currentUser) {
+                throw new Error("Faltan datos de proyecto o sesión.");
+            }
+
+            setStatus("Restaurando versión...", false);
+            const response = await fetch("/api/projects", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    proyecto: proyectoNombre,
+                    plantilla: version?.plantilla || project.plantilla || "",
+                    user: currentUser,
+                    subfuncion: project.subfuncion || "",
+                    json: payload,
+                    overwrite: true
+                })
+            });
+
+            if (!response.ok) {
+                let errorPayload = null;
+                try {
+                    errorPayload = await response.json();
+                } catch (error) {
+                    errorPayload = null;
+                }
+                if (response.status === 403 && errorPayload?.code === "OWNER_REQUIRED") {
+                    throw new Error("Solo el creador puede restaurar versiones de este proyecto.");
+                }
+                throw new Error("No se pudo consolidar la restauración.");
+            }
+
+            let savedData = null;
+            try {
+                savedData = await response.json();
+            } catch (error) {
+                savedData = null;
+            }
+
             applyProjectData(payload);
             saveProjectState.loadedProject = {
-                id: historyProjectState.currentProject?.id || null,
-                proyecto: historyProjectState.currentProject?.proyecto || "",
-                subfuncion: historyProjectState.currentProject?.subfuncion || "",
-                user: historyProjectState.currentProject?.user || ""
+                id: savedData?.id || project.id || null,
+                proyecto: proyectoNombre,
+                subfuncion: project.subfuncion || "",
+                user: currentUser
             };
-            setStatus("Versión restaurada en el editor. Guarda para consolidar cambios.", false);
-            markProjectAsDirty();
+            saveProjectState.activeSubfuncion = project.subfuncion || "";
+            markProjectAsSaved();
+
+            modal.style.display = "none";
+            const loadModal = ensureLoadProjectModal();
+            loadModal.style.display = "flex";
+            if (typeof loadModal.loadProjects === "function") {
+                await loadModal.loadProjects(saveProjectState.activeSubfuncion);
+            }
+            if (typeof loadModal.setStatus === "function") {
+                loadModal.setStatus("Versión restaurada.", false);
+            }
         } catch (error) {
             console.error(error);
-            setStatus("No se pudo restaurar esta versión.");
+            setStatus(error?.message || "No se pudo restaurar esta versión.");
         }
     };
 
@@ -1515,6 +1569,7 @@ function ensureLoadProjectModal() {
     modal.loadProjects = loadProjects;
     modal.renderSubfunciones = renderSubfunciones;
     modal.renderProjects = renderProjects;
+    modal.setStatus = setStatus;
     return modal;
 }
 

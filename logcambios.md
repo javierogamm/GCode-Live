@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.61 - 2026-03-12
+- El botón **Restaurar** del historial ahora consolida la restauración como una **nueva iteración guardada** del proyecto activo (sobrescritura controlada) antes de cargarla en el editor.
+- Tras restaurar, se cierra el modal de historial, se vuelve al modal de carga y se muestra el aviso **"Versión restaurada."**.
+- Se mantiene la carga directa de la versión restaurada en el editor para continuar trabajando desde ese estado ya consolidado.
+- Se actualizó la versión visible de la app a `v1.3.61` y la versión del proyecto en `package.json` a `1.3.61`.
+
 ## v1.3.60 - 2026-03-12
 - En el modal de guardar se recupera el flujo de **sobrescribir por defecto** cuando el proyecto activo/cargado coincide y pertenece al usuario, mostrando confirmación previa.
 - Si en la confirmación se cancela la sobrescritura, el guardado continúa automáticamente como **copia** (con nombre sugerido único `copia`, `copia 2`, etc.).
