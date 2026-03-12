@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.62 - 2026-03-12
+- Se reorganizó el panel izquierdo eliminando los botones **Nuevo**, **Pegar** y **Exportar CSV**.
+- Se renombraron los botones de proyecto a **Exportar JSON** e **Importar JSON**.
+- En **Validar tesauros configurados** se añadió un icono `?` a la derecha con tooltip explicativo sobre el copypaste desde Gestiona y la validación/coincidencia de valores en tesauros selector.
+- Se actualizó la versión visible de la app a `v1.3.62` y la versión del proyecto en `package.json` a `1.3.62`.
+
 ## v1.3.61 - 2026-03-12
 - El botón **Restaurar** del historial ahora consolida la restauración como una **nueva iteración guardada** del proyecto activo (sobrescritura controlada) antes de cargarla en el editor.
 - Tras restaurar, se cierra el modal de historial, se vuelve al modal de carga y se muestra el aviso **"Versión restaurada."**.
