@@ -5,15 +5,12 @@ console.log("🚀 Editor Markdown básico iniciado");
 ======================================= */
 const markdownText = document.getElementById("markdownText");
 const lineNumbers = document.getElementById("lineNumbers");
-const btnNuevo = document.getElementById("btnNuevo");
-const btnPegarAuto = document.getElementById("btnPegarAuto");
 const btnCopiar = document.getElementById("btnCopiar");
 const btnDescargar = document.getElementById("btnDescargar");
 const btnExportProyecto = document.getElementById("btnExportProyecto");
 const btnImportProyecto = document.getElementById("btnImportProyecto");
 const btnGuardarProyecto = document.getElementById("btnGuardarProyecto");
 const btnCargarProyecto = document.getElementById("btnCargarProyecto");
-const btnExportCsv = document.getElementById("btnExportCsv");
 const btnValidarTesauros = document.getElementById("btnValidarTesauros");
 const projectNameInput = document.getElementById("projectNameInput");
 const templateNameInput = document.getElementById("templateNameInput");
@@ -2776,12 +2773,6 @@ function openCsvExportModal() {
     modal.style.display = "flex";
 }
 
-if (btnExportCsv) {
-    btnExportCsv.addEventListener("click", () => {
-        openCsvExportModal();
-    });
-}
-
 if (btnValidarTesauros) {
     btnValidarTesauros.addEventListener("click", () => {
         if (window.TesauroManager && typeof TesauroManager.openProjectTesauroValidationModal === "function") {
@@ -2791,21 +2782,6 @@ if (btnValidarTesauros) {
         alert("El gestor de tesauros no está disponible ahora mismo.");
     });
 }
-
-btnNuevo.addEventListener("click", () => {
-    markdownText.value = "";
-    saveProjectState.loadedProject = null;
-    markProjectAsDirty();
-    pushUndoState();
-    updateHighlight();
-});
-
-btnPegarAuto.addEventListener("click", async () => {
-    const text = await navigator.clipboard.readText();
-    markdownText.value += text;
-    pushUndoState();
-    updateHighlight();
-});
 
 btnCopiar.addEventListener("click", () => {
     navigator.clipboard.writeText(markdownText.value);
