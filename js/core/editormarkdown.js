@@ -1309,19 +1309,63 @@ const processLinkState = {
 };
 
 function getFlowDisplayName(flow = {}) {
-    return (flow.proyecto || flow.flow || flow.nombre || flow.titulo || flow.name || flow.id || "Flow").toString();
+    return (flow.nombre || flow.proyecto || flow.titulo || flow.name || flow.flow || flow.id || "Flow").toString();
+}
+
+function normalizePossibleJson(raw) {
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === "object") return raw;
+    if (typeof raw !== "string") return null;
+
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+
+    try {
+        return JSON.parse(trimmed);
+    } catch (error) {
+        const firstBrace = trimmed.indexOf("{");
+        const lastBrace = trimmed.lastIndexOf("}");
+        if (firstBrace >= 0 && lastBrace > firstBrace) {
+            const candidate = trimmed.slice(firstBrace, lastBrace + 1);
+            try {
+                return JSON.parse(candidate);
+            } catch (innerError) {
+                return null;
+            }
+        }
+        return null;
+    }
 }
 
 function extractFlowPayload(flow = {}) {
-    const raw = flow?.json ?? flow?.data ?? flow?.payload ?? null;
-    if (typeof raw === "string") {
-        try {
-            return JSON.parse(raw);
-        } catch (error) {
-            return null;
+    const directCandidates = [
+        flow?.json,
+        flow?.flow,
+        flow?.data,
+        flow?.payload,
+        flow?.contenido,
+        flow?.contenido_json,
+        flow?.json_data,
+        flow?.proceso
+    ];
+
+    for (const candidate of directCandidates) {
+        const parsed = normalizePossibleJson(candidate);
+        if (parsed && typeof parsed === "object") {
+            if (parsed.nodos || parsed.plantillas || parsed.conexiones || parsed.fichaProyecto) {
+                return parsed;
+            }
         }
     }
-    return raw && typeof raw === "object" ? raw : null;
+
+    for (const value of Object.values(flow || {})) {
+        const parsed = normalizePossibleJson(value);
+        if (parsed && typeof parsed === "object" && (parsed.nodos || parsed.plantillas)) {
+            return parsed;
+        }
+    }
+
+    return null;
 }
 
 function buildTemplatesFromFlow(flowData = {}) {

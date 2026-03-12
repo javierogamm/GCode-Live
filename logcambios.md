@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.64 - 2026-03-12
+- Se corrigió la vinculación de Process para aceptar más formatos de payload del flow y evitar falsos "JSON inválido" cuando el contenido no llega en `json` sino en otras columnas (como `flow`, `data`, `payload`, etc.).
+- El extractor ahora intenta parseo robusto de cadenas (incluyendo recorte al bloque `{...}` cuando hay texto envolvente) y valida por estructura (`nodos`, `plantillas`, `conexiones` o `fichaProyecto`).
+- Se ajustó el nombre mostrado del flow para priorizar la columna **`nombre`**, tal y como se usa en la tabla hermana.
+- Se actualizó la versión visible de la app a `v1.3.64` y la versión del proyecto en `package.json` a `1.3.64`.
+
 ## v1.3.63 - 2026-03-12
 - Se añadió el nuevo botón lateral **"Vincular proyecto process"** para iniciar la vinculación de plantillas desde la app hermana de flujos.
 - Se implementó un nuevo modal de vinculación (similar al de carga) que lista carpetas por **subfunción** desde la tabla `Process_Flows` y permite seleccionar un flow para vincular.
