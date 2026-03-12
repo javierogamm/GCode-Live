@@ -11,6 +11,7 @@ const btnExportProyecto = document.getElementById("btnExportProyecto");
 const btnImportProyecto = document.getElementById("btnImportProyecto");
 const btnGuardarProyecto = document.getElementById("btnGuardarProyecto");
 const btnCargarProyecto = document.getElementById("btnCargarProyecto");
+const btnVincularProcess = document.getElementById("btnVincularProcess");
 const btnValidarTesauros = document.getElementById("btnValidarTesauros");
 const projectNameInput = document.getElementById("projectNameInput");
 const templateNameInput = document.getElementById("templateNameInput");
@@ -1298,6 +1299,255 @@ async function openProjectHistoryModal(project) {
     }
 }
 
+
+
+const processLinkState = {
+    modal: null,
+    subfunciones: [],
+    activeSubfuncion: "",
+    flows: []
+};
+
+function getFlowDisplayName(flow = {}) {
+    return (flow.proyecto || flow.flow || flow.nombre || flow.titulo || flow.name || flow.id || "Flow").toString();
+}
+
+function extractFlowPayload(flow = {}) {
+    const raw = flow?.json ?? flow?.data ?? flow?.payload ?? null;
+    if (typeof raw === "string") {
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            return null;
+        }
+    }
+    return raw && typeof raw === "object" ? raw : null;
+}
+
+function buildTemplatesFromFlow(flowData = {}) {
+    const nodes = Array.isArray(flowData?.nodos) ? flowData.nodos : [];
+    const nodeTemplates = flowData?.plantillas && typeof flowData.plantillas === "object" ? flowData.plantillas : {};
+    const allowedTypes = new Set(["formulario", "documento"]);
+    const usedNames = new Set();
+
+    const ensureUniqueName = (name, index) => {
+        const base = (name || "").trim() || `Plantilla ${index}`;
+        if (!usedNames.has(base)) {
+            usedNames.add(base);
+            return base;
+        }
+        let counter = 2;
+        let candidate = `${base} ${counter}`;
+        while (usedNames.has(candidate)) {
+            counter += 1;
+            candidate = `${base} ${counter}`;
+        }
+        usedNames.add(candidate);
+        return candidate;
+    };
+
+    let index = 1;
+    return nodes
+        .filter((node) => allowedTypes.has(String(node?.tipo || "").toLowerCase()))
+        .map((node) => {
+            const nodeId = node?.id || "";
+            const nodeType = String(node?.tipo || "Documento").toLowerCase();
+            const nodeTitle = node?.titulo || nodeId || `Plantilla ${index}`;
+            const markdown = typeof nodeTemplates[nodeId] === "string"
+                ? nodeTemplates[nodeId]
+                : (typeof node?.plantillaTexto === "string" ? node.plantillaTexto : "");
+            const template = {
+                name: ensureUniqueName(nodeTitle, index),
+                type: nodeType === "formulario" ? "Formulario" : "Documento",
+                markdown
+            };
+            index += 1;
+            return template;
+        });
+}
+
+function ensureProcessLinkModal() {
+    if (processLinkState.modal) return processLinkState.modal;
+
+    const modal = document.createElement("div");
+    modal.id = "processLinkModal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-card load-project-modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3>Vincular proyecto process</h3>
+                    <p class="muted">Crea plantillas desde nodos formulario/documento del flow seleccionado.</p>
+                </div>
+                <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="modal-body load-project-body">
+                <div class="load-project-sidebar">
+                    <h4>Carpetas (subfunción)</h4>
+                    <div class="load-project-folder-list" id="processLinkFolderList"></div>
+                </div>
+                <div class="load-project-main">
+                    <div class="load-project-list" id="processLinkList"></div>
+                    <div class="load-project-status" id="processLinkStatus"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector(".modal-close");
+    const statusEl = modal.querySelector("#processLinkStatus");
+    const folderList = modal.querySelector("#processLinkFolderList");
+    const flowList = modal.querySelector("#processLinkList");
+
+    const setStatus = (msg, isError = true) => {
+        if (!statusEl) return;
+        statusEl.textContent = msg || "";
+        statusEl.style.color = isError ? "#b91c1c" : "#15803d";
+    };
+
+    const renderSubfunciones = () => {
+        if (!folderList) return;
+        folderList.innerHTML = "";
+        if (!processLinkState.subfunciones.length) {
+            folderList.innerHTML = `<div class="muted">Sin carpetas en Process_Flows.</div>`;
+            return;
+        }
+
+        processLinkState.subfunciones.forEach((subfuncion) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "load-project-folder" + (processLinkState.activeSubfuncion === subfuncion ? " active" : "");
+            button.textContent = subfuncion || "Sin carpeta";
+            button.addEventListener("click", () => {
+                processLinkState.activeSubfuncion = subfuncion;
+                renderSubfunciones();
+                if (typeof modal.loadFlows === "function") {
+                    modal.loadFlows(subfuncion);
+                }
+            });
+            folderList.appendChild(button);
+        });
+    };
+
+    const linkFlow = (flow) => {
+        const payload = extractFlowPayload(flow);
+        if (!payload) {
+            setStatus("El flow seleccionado no contiene un JSON válido.");
+            return;
+        }
+
+        const templates = buildTemplatesFromFlow(payload);
+        if (!templates.length) {
+            setStatus("No hay nodos formulario/documento con plantilla disponible.");
+            return;
+        }
+
+        setProjectName(getFlowDisplayName(flow));
+        setTemplates(templates, templates[0]?.name || "");
+        markProjectAsDirty();
+        setStatus(`Vinculación completada: ${templates.length} plantillas creadas.`, false);
+        modal.style.display = "none";
+    };
+
+    const renderFlows = () => {
+        if (!flowList) return;
+        flowList.innerHTML = "";
+        if (!processLinkState.flows.length) {
+            flowList.innerHTML = `<div class="muted">No hay flows en esta carpeta.</div>`;
+            return;
+        }
+
+        processLinkState.flows.forEach((flow) => {
+            const row = document.createElement("div");
+            row.className = "load-project-item";
+
+            const meta = document.createElement("div");
+            meta.className = "load-project-meta";
+            const title = document.createElement("div");
+            title.className = "load-project-title";
+            title.textContent = getFlowDisplayName(flow);
+            const details = document.createElement("div");
+            details.className = "load-project-details";
+            details.textContent = `Subfunción: ${flow?.subfuncion || "Sin carpeta"}`;
+            meta.appendChild(title);
+            meta.appendChild(details);
+
+            const actions = document.createElement("div");
+            actions.className = "load-project-actions";
+            const linkBtn = document.createElement("button");
+            linkBtn.type = "button";
+            linkBtn.className = "load-project-action";
+            linkBtn.textContent = "Vincular";
+            linkBtn.addEventListener("click", () => linkFlow(flow));
+
+            actions.appendChild(linkBtn);
+            row.appendChild(meta);
+            row.appendChild(actions);
+            flowList.appendChild(row);
+        });
+    };
+
+    const loadSubfunciones = async () => {
+        try {
+            setStatus("Cargando subfunciones de Process_Flows...", false);
+            const response = await fetch("/api/process-subfunciones");
+            if (!response.ok) throw new Error("Error al cargar carpetas de process");
+            const data = await response.json();
+            processLinkState.subfunciones = Array.isArray(data) ? data : [];
+            if (!processLinkState.activeSubfuncion && processLinkState.subfunciones.length) {
+                processLinkState.activeSubfuncion = processLinkState.subfunciones[0] || "";
+            }
+            renderSubfunciones();
+            await loadFlows(processLinkState.activeSubfuncion);
+            setStatus("");
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudieron cargar las carpetas de process.");
+        }
+    };
+
+    const loadFlows = async (subfuncion = "") => {
+        try {
+            setStatus("Cargando flows...", false);
+            const query = subfuncion ? `?subfuncion=${encodeURIComponent(subfuncion)}` : "";
+            const response = await fetch(`/api/process-flows${query}`);
+            if (!response.ok) throw new Error("Error al cargar flows");
+            const data = await response.json();
+            processLinkState.flows = Array.isArray(data) ? data : [];
+            renderFlows();
+            setStatus("");
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudieron cargar los flows.");
+        }
+    };
+
+    if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+            modal.style.display = "none";
+        });
+    }
+
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) modal.style.display = "none";
+    });
+
+    modal.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            modal.style.display = "none";
+        }
+    });
+
+    processLinkState.modal = modal;
+    modal.loadSubfunciones = loadSubfunciones;
+    modal.loadFlows = loadFlows;
+    modal.renderSubfunciones = renderSubfunciones;
+    modal.renderFlows = renderFlows;
+    modal.setStatus = setStatus;
+    return modal;
+}
+
 const loadProjectState = {
     modal: null,
     subfunciones: [],
@@ -1574,6 +1824,17 @@ if (btnCargarProyecto) {
     btnCargarProyecto.addEventListener("click", () => {
         syncActiveTemplateMarkdown();
         const modal = ensureLoadProjectModal();
+        modal.style.display = "flex";
+        if (typeof modal.loadSubfunciones === "function") {
+            modal.loadSubfunciones();
+        }
+    });
+}
+
+if (btnVincularProcess) {
+    btnVincularProcess.addEventListener("click", () => {
+        syncActiveTemplateMarkdown();
+        const modal = ensureProcessLinkModal();
         modal.style.display = "flex";
         if (typeof modal.loadSubfunciones === "function") {
             modal.loadSubfunciones();

@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.63 - 2026-03-12
+- Se añadió el nuevo botón lateral **"Vincular proyecto process"** para iniciar la vinculación de plantillas desde la app hermana de flujos.
+- Se implementó un nuevo modal de vinculación (similar al de carga) que lista carpetas por **subfunción** desde la tabla `Process_Flows` y permite seleccionar un flow para vincular.
+- Al vincular un flow, la app crea automáticamente una plantilla por cada nodo de tipo **formulario** o **documento**, usando el título del nodo como nombre y cargando su Markdown desde `plantillas[nodo.id]` o `nodo.plantillaTexto`.
+- Se añadieron los endpoints `GET /api/process-subfunciones` y `GET /api/process-flows` para consultar subfunciones y registros de `Process_Flows`.
+- Se actualizó la versión visible de la app a `v1.3.63` y la versión del proyecto en `package.json` a `1.3.63`.
+
 ## v1.3.62 - 2026-03-12
 - Se reorganizó el panel izquierdo eliminando los botones **Nuevo**, **Pegar** y **Exportar CSV**.
 - Se renombraron los botones de proyecto a **Exportar JSON** e **Importar JSON**.
