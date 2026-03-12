@@ -1,5 +1,33 @@
 const { supabaseFetch } = require("./_supabase");
 
+async function createBackupFromPayload(payload, sourceId) {
+  if (!payload || !sourceId) {
+    return;
+  }
+
+  const backupBody = {
+    proyecto: payload.proyecto,
+    plantilla: payload.plantilla,
+    user: payload.user,
+    subfuncion: payload.subfuncion,
+    json: payload.json,
+    fecha_guardado: new Date().toISOString(),
+    ID_Origen: String(sourceId)
+  };
+
+  const backupResponse = await supabaseFetch("Code_Markdowns_BACKUP", {
+    method: "POST",
+    body: backupBody,
+    query: "?select=id",
+    prefer: "return=representation"
+  });
+
+  if (!backupResponse.ok) {
+    const detail = await backupResponse.text();
+    throw new Error(detail || "Backup insert failed");
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method === "GET") {
     try {
@@ -64,6 +92,8 @@ module.exports = async (req, res) => {
       const lookupData = await lookupResponse.json();
       const payload = { proyecto, plantilla, user: normalizedUser, subfuncion, json };
       let response = null;
+      let sourceId = null;
+
       if (Array.isArray(lookupData) && lookupData.length) {
         const existing = lookupData[0] || {};
         const existingAuthor = typeof existing.user === "string" ? existing.user.trim() : "";
@@ -75,11 +105,11 @@ module.exports = async (req, res) => {
           res.status(403).json({ error: "Only owner can overwrite", code: "OWNER_REQUIRED", owner: existingAuthor });
           return;
         }
-        const existingId = lookupData[0].id;
+        sourceId = lookupData[0].id;
         response = await supabaseFetch("Code_Markdowns", {
           method: "PATCH",
           body: payload,
-          query: `?id=eq.${encodeURIComponent(existingId)}&select=id,created_at,proyecto,plantilla,user,subfuncion`,
+          query: `?id=eq.${encodeURIComponent(sourceId)}&select=id,created_at,proyecto,plantilla,user,subfuncion`,
           prefer: "return=representation"
         });
       } else {
@@ -96,7 +126,16 @@ module.exports = async (req, res) => {
         return;
       }
       const data = await response.json();
-      res.status(201).json(data[0] || data);
+      const savedRecord = data[0] || data;
+      const recordId = sourceId || savedRecord?.id;
+
+      try {
+        await createBackupFromPayload(payload, recordId);
+      } catch (backupError) {
+        console.error("Backup error:", backupError);
+      }
+
+      res.status(201).json(savedRecord);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Supabase env vars missing or request failed" });

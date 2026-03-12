@@ -1,5 +1,25 @@
 # Log de cambios
 
+## v1.3.61 - 2026-03-12
+- El botón **Restaurar** del historial ahora consolida la restauración como una **nueva iteración guardada** del proyecto activo (sobrescritura controlada) antes de cargarla en el editor.
+- Tras restaurar, se cierra el modal de historial, se vuelve al modal de carga y se muestra el aviso **"Versión restaurada."**.
+- Se mantiene la carga directa de la versión restaurada en el editor para continuar trabajando desde ese estado ya consolidado.
+- Se actualizó la versión visible de la app a `v1.3.61` y la versión del proyecto en `package.json` a `1.3.61`.
+
+## v1.3.60 - 2026-03-12
+- En el modal de guardar se recupera el flujo de **sobrescribir por defecto** cuando el proyecto activo/cargado coincide y pertenece al usuario, mostrando confirmación previa.
+- Si en la confirmación se cancela la sobrescritura, el guardado continúa automáticamente como **copia** (con nombre sugerido único `copia`, `copia 2`, etc.).
+- Se añade botón explícito **Guardar copia** en el modal para forzar guardado derivado en cualquier momento.
+- Se actualizó la versión visible de la app a `v1.3.60` y la versión del proyecto en `package.json` a `1.3.60`.
+
+## v1.3.59 - 2026-03-12
+- Se reforzó el flujo de guardado: al abrir el modal de guardar se prioriza el proyecto activo/cargado y el botón principal pasa a **Guardar copia** para crear un nuevo registro derivado (nuevo proyecto activo).
+- Se eliminó la opción de sobrescribir desde el modal de carga y se añadió un botón **Historial** por proyecto para consultar versiones en backup.
+- Se añadió confirmación nativa del navegador al intentar salir/cambiar de URL con cambios sin guardar (`beforeunload`).
+- Se implementó el histórico en backend con nueva ruta `GET /api/project-history` leyendo `Code_Markdowns_BACKUP` por `ID_Origen`.
+- En cada guardado/sobrescritura de `Code_Markdowns`, el backend replica una versión en `Code_Markdowns_BACKUP` con `fecha_guardado` e `ID_Origen`.
+- Se actualizó la versión visible de la app a `v1.3.59` y la versión del proyecto en `package.json` a `1.3.59`.
+
 ## v1.3.58 - 2026-02-17
 - En la validación de tesauros configurados, la consolidación final ahora **solo** crea/actualiza tesauros del copypaste que sean coincidentes por referencia con los detectados en el proyecto.
 - Los tesauros coincidentes se consolidan con las características del copypaste (nombre, tipo, momento y agrupación), dejando fuera los no coincidentes.

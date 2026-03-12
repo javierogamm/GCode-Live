@@ -267,6 +267,7 @@ const addTemplate = (name, markdown = "", type = "Documento") => {
         updateLineNumbers();
     }
     renderActiveTemplateDetails();
+    markProjectAsDirty();
     return template;
 };
 
@@ -478,6 +479,7 @@ if (projectNameInput) {
     projectNameInput.addEventListener("input", (event) => {
         const value = event.target ? event.target.value : "";
         setProjectName(value);
+        markProjectAsDirty();
     });
 }
 if (templateNameInput) {
@@ -485,6 +487,7 @@ if (templateNameInput) {
         const active = getActiveTemplate();
         if (!active) return;
         active.name = (event.target ? event.target.value : "").trim() || "Plantilla";
+        markProjectAsDirty();
         if (saveProjectState.modal && saveProjectState.modal.style.display === "flex" && typeof saveProjectState.modal.renderLocalTemplates === "function") {
             saveProjectState.modal.renderLocalTemplates();
         }
@@ -495,6 +498,7 @@ if (templateTypeSelect) {
         const active = getActiveTemplate();
         if (!active) return;
         active.type = normalizeTemplateType(event.target ? event.target.value : "Documento");
+        markProjectAsDirty();
         if (saveProjectState.modal && saveProjectState.modal.style.display === "flex" && typeof saveProjectState.modal.renderLocalTemplates === "function") {
             saveProjectState.modal.renderLocalTemplates();
         }
@@ -555,6 +559,7 @@ if (btnImportProyecto) {
                     // 1) Restaurar markdown
                     applyProjectData(data);
                     saveProjectState.loadedProject = null;
+                    markProjectAsDirty();
 
                     alert("✔ Proyecto importado correctamente.");
                 } catch (err) {
@@ -577,6 +582,24 @@ const saveProjectState = {
     projects: [],
     loadedProject: null
 };
+
+const unsavedChangesState = {
+    dirty: false
+};
+
+function markProjectAsDirty() {
+    unsavedChangesState.dirty = true;
+}
+
+function markProjectAsSaved() {
+    unsavedChangesState.dirty = false;
+}
+
+window.addEventListener("beforeunload", (event) => {
+    if (!unsavedChangesState.dirty) return;
+    event.preventDefault();
+    event.returnValue = "";
+});
 
 function ensureSaveProjectModal() {
     if (saveProjectState.modal) return saveProjectState.modal;
@@ -607,6 +630,7 @@ function ensureSaveProjectModal() {
                     <div class="save-project-status" id="saveProjectStatus"></div>
                     <div class="save-project-footer">
                         <button type="button" class="save-project-save-btn" data-action="guardar">Guardar proyecto</button>
+                        <button type="button" class="btn-secondary save-project-copy-btn" data-action="guardar-copia">Guardar copia</button>
                     </div>
                 </div>
             </div>
@@ -621,6 +645,7 @@ function ensureSaveProjectModal() {
     const projectInput = modal.querySelector("#saveProjectProjectInput");
     const subfuncionInput = modal.querySelector("#saveProjectSubfuncionInput");
     const saveBtn = modal.querySelector("[data-action='guardar']");
+    const saveCopyBtn = modal.querySelector("[data-action='guardar-copia']");
 
     const setStatus = (msg, isError = true) => {
         if (!statusEl) return;
@@ -731,13 +756,13 @@ function ensureSaveProjectModal() {
 
     const renderRemoteProjects = () => {
         const list = modal.querySelector("#saveProjectList");
+        const currentUser = getCurrentAuthUserName();
         if (!list) return;
         list.innerHTML = "";
         if (!saveProjectState.projects.length) {
             list.innerHTML = `<div class="muted">No hay proyectos guardados para esta carpeta.</div>`;
             return;
         }
-        const currentUser = getCurrentAuthUserName();
         saveProjectState.projects.forEach((project) => {
             const row = document.createElement("div");
             row.className = "save-project-item";
@@ -757,19 +782,6 @@ function ensureSaveProjectModal() {
 
             const isOwner = currentUser && project.user && currentUser === project.user;
             if (isOwner) {
-                const overwriteBtn = document.createElement("button");
-                overwriteBtn.type = "button";
-                overwriteBtn.className = "save-project-use-btn";
-                overwriteBtn.textContent = "Sobrescribir";
-                overwriteBtn.addEventListener("click", async () => {
-                    if (!window.confirm(`¿Sobrescribir el proyecto "${project.proyecto || "Sin nombre"}"?`)) return;
-                    if (projectInput) {
-                        projectInput.value = project.proyecto || "";
-                    }
-                    await saveProject(true);
-                });
-                actions.appendChild(overwriteBtn);
-
                 const deleteBtn = document.createElement("button");
                 deleteBtn.type = "button";
                 deleteBtn.className = "save-project-delete-btn";
@@ -779,7 +791,7 @@ function ensureSaveProjectModal() {
             } else {
                 const readonly = document.createElement("small");
                 readonly.className = "save-project-owner";
-                readonly.textContent = "Solo el creador puede sobrescribir/eliminar";
+                readonly.textContent = "Solo el creador puede eliminar";
                 actions.appendChild(readonly);
             }
 
@@ -823,6 +835,47 @@ function ensureSaveProjectModal() {
             saveProjectState.projects = [];
             renderRemoteProjects();
             setStatus("No se pudieron cargar los proyectos guardados.");
+        }
+    };
+
+    
+
+    const buildCopyProjectName = (baseName) => {
+        const normalizedBase = (baseName || "").trim() || "Proyecto";
+        const usedNames = new Set((saveProjectState.projects || []).map((row) => (row?.proyecto || "").trim()).filter(Boolean));
+        let candidate = `${normalizedBase} copia`;
+        let idx = 2;
+        while (usedNames.has(candidate)) {
+            candidate = `${normalizedBase} copia ${idx}`;
+            idx += 1;
+        }
+        return candidate;
+    };
+
+    const canOverwriteCurrentProject = () => {
+        const proyectoNombre = projectInput ? projectInput.value.trim() : "";
+        const loadedProjectName = saveProjectState.loadedProject?.proyecto || "";
+        const loadedProjectOwner = saveProjectState.loadedProject?.user || "";
+        const currentUser = getCurrentAuthUserName();
+
+        return Boolean(
+            proyectoNombre
+            && loadedProjectName
+            && proyectoNombre === loadedProjectName
+            && currentUser
+            && loadedProjectOwner
+            && currentUser === loadedProjectOwner
+        );
+    };
+
+    const prepareCopyName = () => {
+        if (!projectInput) return;
+        const proyectoNombre = projectInput.value.trim();
+        const loadedProjectName = saveProjectState.loadedProject?.proyecto || "";
+        if (!proyectoNombre) return;
+        if (loadedProjectName && proyectoNombre === loadedProjectName) {
+            projectInput.value = buildCopyProjectName(loadedProjectName);
+            setStatus(`Se guardará como copia: "${projectInput.value}".`, false);
         }
     };
 
@@ -911,6 +964,7 @@ function ensureSaveProjectModal() {
                 user: currentUser
             };
             setStatus(overwrite ? "Proyecto sobrescrito correctamente." : "Proyecto guardado correctamente.", false);
+            markProjectAsSaved();
             renderLocalTemplates();
             await loadSubfunciones();
             await loadProjects(subfuncionNombre);
@@ -935,35 +989,27 @@ function ensureSaveProjectModal() {
 
     if (saveBtn) {
         saveBtn.addEventListener("click", async () => {
-            const proyectoNombre = projectInput ? projectInput.value.trim() : "";
-            const loadedProjectName = saveProjectState.loadedProject?.proyecto || "";
-            const loadedProjectOwner = saveProjectState.loadedProject?.user || "";
-            const currentUser = getCurrentAuthUserName();
-            const canOverwriteLoaded = loadedProjectName
-                && proyectoNombre
-                && proyectoNombre === loadedProjectName
-                && currentUser
-                && loadedProjectOwner
-                && currentUser === loadedProjectOwner;
+            if (canOverwriteCurrentProject()) {
+                const confirmation = window.confirm(`Vas a sobrescribir el proyecto "${saveProjectState.loadedProject?.proyecto || ""}".
 
-            if (!canOverwriteLoaded) {
+Aceptar: sobrescribir
+Cancelar: guardar copia`);
+                if (confirmation) {
+                    await saveProject(true);
+                    return;
+                }
+                prepareCopyName();
                 await saveProject(false);
                 return;
             }
+            await saveProject(false);
+        });
+    }
 
-            const overwrite = window.confirm(`Has cargado desde BDD el proyecto "${loadedProjectName}". ¿Sobrescribir?`);
-            if (overwrite) {
-                await saveProject(true);
-                return;
-            }
-
-            const suggestedName = `${loadedProjectName} copia`;
-            if (projectInput) {
-                projectInput.value = suggestedName;
-                projectInput.focus();
-                projectInput.select();
-            }
-            setStatus("Indica un nuevo nombre de proyecto y vuelve a guardar.", false);
+    if (saveCopyBtn) {
+        saveCopyBtn.addEventListener("click", async () => {
+            prepareCopyName();
+            await saveProject(false);
         });
     }
 
@@ -997,7 +1043,7 @@ if (btnGuardarProyecto) {
         const projectInput = modal.querySelector("#saveProjectProjectInput");
         const subfuncionInput = modal.querySelector("#saveProjectSubfuncionInput");
         if (projectInput) {
-            projectInput.value = projectState.name || saveProjectState.loadedProject?.proyecto || "";
+            projectInput.value = saveProjectState.loadedProject?.proyecto || projectState.name || "";
         }
         if (subfuncionInput) {
             subfuncionInput.value = saveProjectState.activeSubfuncion || saveProjectState.loadedProject?.subfuncion || "";
@@ -1013,6 +1059,246 @@ if (btnGuardarProyecto) {
             modal.loadProjects(subfuncionInput ? subfuncionInput.value.trim() : "");
         }
     });
+}
+
+
+const historyProjectState = {
+    modal: null,
+    currentProject: null,
+    versions: []
+};
+
+function ensureProjectHistoryModal() {
+    if (historyProjectState.modal) return historyProjectState.modal;
+
+    const modal = document.createElement("div");
+    modal.id = "projectHistoryModal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-card load-project-modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3>Historial de versiones</h3>
+                    <p class="muted" id="projectHistorySubtitle"></p>
+                </div>
+                <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="load-project-list" id="projectHistoryList"></div>
+                <div class="load-project-status" id="projectHistoryStatus"></div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeBtn = modal.querySelector(".modal-close");
+    const statusEl = modal.querySelector("#projectHistoryStatus");
+    const listEl = modal.querySelector("#projectHistoryList");
+    const subtitleEl = modal.querySelector("#projectHistorySubtitle");
+
+    const setStatus = (msg, isError = true) => {
+        if (!statusEl) return;
+        statusEl.textContent = msg || "";
+        statusEl.style.color = isError ? "#b91c1c" : "#15803d";
+    };
+
+    const formatDate = (raw) => {
+        if (!raw) return "Sin fecha";
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return "Sin fecha";
+        return parsed.toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+    };
+
+    const restoreVersion = async (version) => {
+        try {
+            const payload = typeof version?.json === "string" ? JSON.parse(version.json) : version?.json;
+            if (!payload || typeof payload !== "object") throw new Error("Versión inválida");
+
+            const project = historyProjectState.currentProject || {};
+            const proyectoNombre = (project.proyecto || "").trim();
+            const currentUser = getCurrentAuthUserName();
+            if (!proyectoNombre || !currentUser) {
+                throw new Error("Faltan datos de proyecto o sesión.");
+            }
+
+            setStatus("Restaurando versión...", false);
+            const response = await fetch("/api/projects", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    proyecto: proyectoNombre,
+                    plantilla: version?.plantilla || project.plantilla || "",
+                    user: currentUser,
+                    subfuncion: project.subfuncion || "",
+                    json: payload,
+                    overwrite: true
+                })
+            });
+
+            if (!response.ok) {
+                let errorPayload = null;
+                try {
+                    errorPayload = await response.json();
+                } catch (error) {
+                    errorPayload = null;
+                }
+                if (response.status === 403 && errorPayload?.code === "OWNER_REQUIRED") {
+                    throw new Error("Solo el creador puede restaurar versiones de este proyecto.");
+                }
+                throw new Error("No se pudo consolidar la restauración.");
+            }
+
+            let savedData = null;
+            try {
+                savedData = await response.json();
+            } catch (error) {
+                savedData = null;
+            }
+
+            applyProjectData(payload);
+            saveProjectState.loadedProject = {
+                id: savedData?.id || project.id || null,
+                proyecto: proyectoNombre,
+                subfuncion: project.subfuncion || "",
+                user: currentUser
+            };
+            saveProjectState.activeSubfuncion = project.subfuncion || "";
+            markProjectAsSaved();
+
+            modal.style.display = "none";
+            const loadModal = ensureLoadProjectModal();
+            loadModal.style.display = "flex";
+            if (typeof loadModal.loadProjects === "function") {
+                await loadModal.loadProjects(saveProjectState.activeSubfuncion);
+            }
+            if (typeof loadModal.setStatus === "function") {
+                loadModal.setStatus("Versión restaurada.", false);
+            }
+        } catch (error) {
+            console.error(error);
+            setStatus(error?.message || "No se pudo restaurar esta versión.");
+        }
+    };
+
+    const loadVersion = async (version) => {
+        try {
+            const payload = typeof version?.json === "string" ? JSON.parse(version.json) : version?.json;
+            if (!payload || typeof payload !== "object") throw new Error("Versión inválida");
+            applyProjectData(payload);
+            saveProjectState.loadedProject = {
+                id: historyProjectState.currentProject?.id || null,
+                proyecto: historyProjectState.currentProject?.proyecto || "",
+                subfuncion: historyProjectState.currentProject?.subfuncion || "",
+                user: historyProjectState.currentProject?.user || ""
+            };
+            setStatus("Versión cargada correctamente.", false);
+            markProjectAsSaved();
+            modal.style.display = "none";
+        } catch (error) {
+            console.error(error);
+            setStatus("No se pudo cargar esta versión.");
+        }
+    };
+
+    modal.renderVersions = () => {
+        if (!listEl) return;
+        listEl.innerHTML = "";
+        if (subtitleEl) {
+            subtitleEl.textContent = historyProjectState.currentProject
+                ? `Proyecto: ${historyProjectState.currentProject.proyecto || "Sin nombre"}`
+                : "";
+        }
+        if (!historyProjectState.versions.length) {
+            listEl.innerHTML = `<div class="muted">Sin versiones en histórico.</div>`;
+            return;
+        }
+        historyProjectState.versions.forEach((version) => {
+            const row = document.createElement("div");
+            row.className = "load-project-item";
+            const meta = document.createElement("div");
+            meta.className = "load-project-meta";
+            const title = document.createElement("div");
+            title.className = "load-project-title";
+            title.textContent = `Versión #${version.id}`;
+            const details = document.createElement("div");
+            details.className = "load-project-details";
+            details.textContent = `Guardado: ${formatDate(version.fecha_guardado || version.created_at)} · Autor: ${version.user || "Sin autor"}`;
+            meta.appendChild(title);
+            meta.appendChild(details);
+
+            const actions = document.createElement("div");
+            actions.className = "load-project-actions";
+
+            const loadBtn = document.createElement("button");
+            loadBtn.type = "button";
+            loadBtn.className = "load-project-action";
+            loadBtn.textContent = "Cargar";
+            loadBtn.addEventListener("click", () => loadVersion(version));
+
+            const restoreBtn = document.createElement("button");
+            restoreBtn.type = "button";
+            restoreBtn.className = "load-project-action load-project-action-history";
+            restoreBtn.textContent = "Restaurar";
+            restoreBtn.addEventListener("click", () => restoreVersion(version));
+
+            actions.appendChild(loadBtn);
+            actions.appendChild(restoreBtn);
+
+            row.appendChild(meta);
+            row.appendChild(actions);
+            listEl.appendChild(row);
+        });
+    };
+
+    if (closeBtn) {
+        closeBtn.addEventListener("click", () => {
+            modal.style.display = "none";
+        });
+    }
+
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) modal.style.display = "none";
+    });
+
+    historyProjectState.modal = modal;
+    modal.setStatus = setStatus;
+    return modal;
+}
+
+async function openProjectHistoryModal(project) {
+    if (!project?.id) return;
+    const modal = ensureProjectHistoryModal();
+    historyProjectState.currentProject = project;
+    historyProjectState.versions = [];
+    if (typeof modal.renderVersions === "function") {
+        modal.renderVersions();
+    }
+    if (typeof modal.setStatus === "function") {
+        modal.setStatus("Cargando histórico...", false);
+    }
+    modal.style.display = "flex";
+    try {
+        const response = await fetch(`/api/project-history?projectId=${encodeURIComponent(project.id)}`);
+        if (!response.ok) {
+            throw new Error("Error al cargar histórico.");
+        }
+        const data = await response.json();
+        historyProjectState.versions = Array.isArray(data) ? data : [];
+        if (typeof modal.renderVersions === "function") {
+            modal.renderVersions();
+        }
+        if (typeof modal.setStatus === "function") {
+            modal.setStatus("");
+        }
+    } catch (error) {
+        console.error(error);
+        if (typeof modal.setStatus === "function") {
+            modal.setStatus("No se pudo cargar el histórico.");
+        }
+    }
 }
 
 const loadProjectState = {
@@ -1107,63 +1393,6 @@ function ensureLoadProjectModal() {
         }
     };
 
-    const overwriteProject = async (project) => {
-        const currentUser = getCurrentAuthUserName();
-        const owner = (project?.user || "").trim();
-        if (!currentUser) {
-            setStatus("Debes iniciar sesión para sobrescribir.");
-            return;
-        }
-        if (!owner || currentUser !== owner) {
-            setStatus("Solo el creador puede sobrescribir este registro.");
-            return;
-        }
-        const confirmation = window.confirm(`¿Sobrescribir el proyecto "${project.proyecto || "Sin nombre"}" con el contenido actual?`);
-        if (!confirmation) return;
-
-        const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos)) ? DataTesauro.campos : [];
-        const procedimiento = {
-            proyecto: {
-                nombre: project.proyecto || projectState.name || "",
-                plantillas: projectState.templates.map((tpl) => ({
-                    nombre: tpl.name,
-                    tipo: normalizeTemplateType(tpl.type),
-                    markdown: tpl.markdown
-                })),
-                plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
-            },
-            tesauros
-        };
-
-        try {
-            setStatus("Sobrescribiendo proyecto...", false);
-            const plantillaResumen = composePlantillaResumen();
-            const response = await fetch("/api/projects", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    proyecto: project.proyecto,
-                    plantilla: plantillaResumen,
-                    user: currentUser,
-                    subfuncion: project.subfuncion || "",
-                    json: procedimiento,
-                    overwrite: true
-                })
-            });
-            if (!response.ok) {
-                throw new Error("Error al sobrescribir.");
-            }
-            setProjectName(project.proyecto || "");
-            setStatus("Proyecto sobrescrito correctamente.", false);
-            modal.style.display = "none";
-        } catch (error) {
-            console.error(error);
-            setStatus("No se pudo sobrescribir el proyecto.");
-        }
-    };
-
     const renderSubfunciones = () => {
         if (!folderList) return;
         folderList.innerHTML = "";
@@ -1246,6 +1475,7 @@ function ensureLoadProjectModal() {
                     };
                     saveProjectState.activeSubfuncion = project.subfuncion || "";
                     setStatus("Proyecto cargado correctamente.", false);
+                    markProjectAsSaved();
                     modal.style.display = "none";
                 } catch (error) {
                     console.error(error);
@@ -1256,12 +1486,12 @@ function ensureLoadProjectModal() {
 
             const isOwner = currentUser && project.user && currentUser === project.user;
             if (isOwner) {
-                const overwriteBtn = document.createElement("button");
-                overwriteBtn.type = "button";
-                overwriteBtn.className = "load-project-action load-project-action-overwrite";
-                overwriteBtn.textContent = "Sobrescribir";
-                overwriteBtn.addEventListener("click", () => overwriteProject(project));
-                actions.appendChild(overwriteBtn);
+                const historyBtn = document.createElement("button");
+                historyBtn.type = "button";
+                historyBtn.className = "load-project-action load-project-action-history";
+                historyBtn.textContent = "Historial";
+                historyBtn.addEventListener("click", () => openProjectHistoryModal(project));
+                actions.appendChild(historyBtn);
 
                 const deleteBtn = document.createElement("button");
                 deleteBtn.type = "button";
@@ -1339,6 +1569,7 @@ function ensureLoadProjectModal() {
     modal.loadProjects = loadProjects;
     modal.renderSubfunciones = renderSubfunciones;
     modal.renderProjects = renderProjects;
+    modal.setStatus = setStatus;
     return modal;
 }
 
@@ -2564,6 +2795,7 @@ if (btnValidarTesauros) {
 btnNuevo.addEventListener("click", () => {
     markdownText.value = "";
     saveProjectState.loadedProject = null;
+    markProjectAsDirty();
     pushUndoState();
     updateHighlight();
 });
@@ -3209,6 +3441,7 @@ if (markdownText.parentElement) {
 
 /* 🔹 Cualquier cambio en el textarea (teclado, Ctrl+V texto plano, borrar...) */
 markdownText.addEventListener("input", () => {
+    markProjectAsDirty();
     UndoManager.push(markdownText.value);
     syncActiveTemplateMarkdown();
     updateHighlight();
@@ -3785,3 +4018,4 @@ document.addEventListener("keydown", (e) => {
 
 /* Primera pintura al cargar */
 updateHighlight();
+markProjectAsSaved();
