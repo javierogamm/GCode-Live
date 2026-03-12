@@ -12,10 +12,45 @@ const btnImportProyecto = document.getElementById("btnImportProyecto");
 const btnGuardarProyecto = document.getElementById("btnGuardarProyecto");
 const btnCargarProyecto = document.getElementById("btnCargarProyecto");
 const btnVincularProcess = document.getElementById("btnVincularProcess");
+const btnSincronizarCode = document.getElementById("btnSincronizarCode");
 const btnValidarTesauros = document.getElementById("btnValidarTesauros");
 const projectNameInput = document.getElementById("projectNameInput");
 const templateNameInput = document.getElementById("templateNameInput");
 const templateTypeSelect = document.getElementById("templateTypeSelect");
+
+const SYNC_LOG_STORAGE_KEY = "gcSyncLog";
+
+function registerSyncLog(event = {}) {
+    const entry = {
+        at: new Date().toISOString(),
+        level: event.level || "info",
+        stage: event.stage || "general",
+        detail: event.detail || "",
+        extra: event.extra || null
+    };
+    try {
+        const existing = JSON.parse(localStorage.getItem(SYNC_LOG_STORAGE_KEY) || "[]");
+        const next = Array.isArray(existing) ? existing : [];
+        next.unshift(entry);
+        localStorage.setItem(SYNC_LOG_STORAGE_KEY, JSON.stringify(next.slice(0, 200)));
+    } catch (error) {
+        console.warn("No se pudo persistir gcSyncLog", error);
+    }
+    if (entry.level === "error") {
+        console.error("[SYNC]", entry.stage, entry.detail, entry.extra || "");
+    } else {
+        console.log("[SYNC]", entry.stage, entry.detail, entry.extra || "");
+    }
+}
+
+window.getSyncLog = () => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(SYNC_LOG_STORAGE_KEY) || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
+    }
+};
 
 function getCurrentAuthUserName() {
     const stored = localStorage.getItem("gcUser");
@@ -556,7 +591,7 @@ if (btnImportProyecto) {
 
                     // 1) Restaurar markdown
                     applyProjectData(data);
-                    saveProjectState.loadedProject = null;
+                    setLoadedProjectState(null);
                     markProjectAsDirty();
 
                     alert("✔ Proyecto importado correctamente.");
@@ -580,6 +615,22 @@ const saveProjectState = {
     projects: [],
     loadedProject: null
 };
+
+function setLoadedProjectState(next = null) {
+    if (!next || typeof next !== "object") {
+        saveProjectState.loadedProject = null;
+        return;
+    }
+    saveProjectState.loadedProject = {
+        id: next.id || null,
+        proyecto: next.proyecto || "",
+        subfuncion: next.subfuncion || "",
+        user: next.user || "",
+        sync_code: next.sync_code || "",
+        linked_flow_id: next.linked_flow_id || "",
+        linked_flow_name: next.linked_flow_name || ""
+    };
+}
 
 const unsavedChangesState = {
     dirty: false
@@ -955,12 +1006,15 @@ function ensureSaveProjectModal() {
                 savedData = null;
             }
             saveProjectState.activeSubfuncion = subfuncionNombre;
-            saveProjectState.loadedProject = {
+            setLoadedProjectState({
                 id: savedData?.id || saveProjectState.loadedProject?.id || null,
                 proyecto: proyectoNombre,
                 subfuncion: subfuncionNombre,
-                user: currentUser
-            };
+                user: currentUser,
+                sync_code: savedData?.sync_code || saveProjectState.loadedProject?.sync_code || "",
+                linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
+                linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+            });
             setStatus(overwrite ? "Proyecto sobrescrito correctamente." : "Proyecto guardado correctamente.", false);
             markProjectAsSaved();
             renderLocalTemplates();
@@ -1157,12 +1211,15 @@ function ensureProjectHistoryModal() {
             }
 
             applyProjectData(payload);
-            saveProjectState.loadedProject = {
+            setLoadedProjectState({
                 id: savedData?.id || project.id || null,
                 proyecto: proyectoNombre,
                 subfuncion: project.subfuncion || "",
-                user: currentUser
-            };
+                user: currentUser,
+                sync_code: savedData?.sync_code || project.sync_code || "",
+                linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
+                linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+            });
             saveProjectState.activeSubfuncion = project.subfuncion || "";
             markProjectAsSaved();
 
@@ -1186,12 +1243,15 @@ function ensureProjectHistoryModal() {
             const payload = typeof version?.json === "string" ? JSON.parse(version.json) : version?.json;
             if (!payload || typeof payload !== "object") throw new Error("Versión inválida");
             applyProjectData(payload);
-            saveProjectState.loadedProject = {
+            setLoadedProjectState({
                 id: historyProjectState.currentProject?.id || null,
                 proyecto: historyProjectState.currentProject?.proyecto || "",
                 subfuncion: historyProjectState.currentProject?.subfuncion || "",
-                user: historyProjectState.currentProject?.user || ""
-            };
+                user: historyProjectState.currentProject?.user || "",
+                sync_code: historyProjectState.currentProject?.sync_code || "",
+                linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
+                linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+            });
             setStatus("Versión cargada correctamente.", false);
             markProjectAsSaved();
             modal.style.display = "none";
@@ -1410,6 +1470,122 @@ function buildTemplatesFromFlow(flowData = {}) {
         });
 }
 
+function mergeTemplatesIntoFlowPayload(flowPayload = {}, templates = []) {
+    const nextPayload = {
+        ...flowPayload,
+        plantillas: flowPayload?.plantillas && typeof flowPayload.plantillas === "object"
+            ? { ...flowPayload.plantillas }
+            : {}
+    };
+    if (!nextPayload.fichaProyecto || typeof nextPayload.fichaProyecto !== "object") {
+        nextPayload.fichaProyecto = {};
+    }
+    if (!Array.isArray(nextPayload.fichaProyecto.plantillas)) {
+        nextPayload.fichaProyecto.plantillas = [];
+    }
+
+    const nodes = Array.isArray(nextPayload.nodos) ? nextPayload.nodos : [];
+    const nodeByAlias = new Map();
+    nodes.forEach((node) => {
+        const aliases = [node?.titulo, node?.nombre, node?.name, node?.id]
+            .map((value) => (value || "").toString().trim().toLowerCase())
+            .filter(Boolean);
+        aliases.forEach((alias) => {
+            if (!nodeByAlias.has(alias)) {
+                nodeByAlias.set(alias, node);
+            }
+        });
+    });
+
+    const upsertFichaPlantilla = (template, nodeId) => {
+        const normalizedName = (template?.name || "").trim();
+        if (!normalizedName) return;
+        const existingIdx = nextPayload.fichaProyecto.plantillas.findIndex((item) => {
+            const name = (item?.nombre || item?.name || "").toString().trim().toLowerCase();
+            return name === normalizedName.toLowerCase();
+        });
+        const entry = {
+            nombre: normalizedName,
+            tipo: normalizeTemplateType(template?.type || "Documento"),
+            markdown: typeof template?.markdown === "string" ? template.markdown : "",
+            nodo_id: nodeId || ""
+        };
+        if (existingIdx >= 0) {
+            nextPayload.fichaProyecto.plantillas[existingIdx] = {
+                ...nextPayload.fichaProyecto.plantillas[existingIdx],
+                ...entry
+            };
+        } else {
+            nextPayload.fichaProyecto.plantillas.push(entry);
+        }
+    };
+
+    templates.forEach((template) => {
+        const templateName = (template?.name || "").trim().toLowerCase();
+        if (!templateName) return;
+        const markdown = typeof template?.markdown === "string" ? template.markdown : "";
+        const node = nodeByAlias.get(templateName);
+
+        if (node?.id) {
+            nextPayload.plantillas[node.id] = markdown;
+            node.plantillaTexto = markdown;
+            if (node.data && typeof node.data === "object") {
+                node.data.plantilla = markdown;
+            }
+            upsertFichaPlantilla(template, node.id);
+            return;
+        }
+
+        const fallbackKey = `code_template_${templateName.replace(/\s+/g, "_")}`;
+        nextPayload.plantillas[fallbackKey] = markdown;
+        upsertFichaPlantilla(template, "");
+    });
+
+    return nextPayload;
+}
+
+function appendMissingTemplatesFromFlow(flowPayload = {}) {
+    const nodes = Array.isArray(flowPayload?.nodos) ? flowPayload.nodos : [];
+    const allowedTypes = new Set(["formulario", "documento"]);
+    const existingNames = new Set(
+        (projectState.templates || [])
+            .map((tpl) => (tpl?.name || "").trim().toLowerCase())
+            .filter(Boolean)
+    );
+
+    const addedTemplates = [];
+    let index = 1;
+    nodes.forEach((node) => {
+        const nodeType = String(node?.tipo || "").toLowerCase();
+        if (!allowedTypes.has(nodeType)) return;
+
+        const rawName = (node?.titulo || node?.nombre || node?.name || node?.id || `Plantilla ${index}`).toString().trim();
+        index += 1;
+        if (!rawName) return;
+
+        const normalized = rawName.toLowerCase();
+        if (existingNames.has(normalized)) return;
+
+        const finalName = getUniqueTemplateName(rawName);
+        const template = {
+            id: createTemplateId(),
+            name: finalName,
+            type: nodeType === "formulario" ? "Formulario" : "Documento",
+            markdown: ""
+        };
+        projectState.templates.push(template);
+        existingNames.add(finalName.toLowerCase());
+        addedTemplates.push(template);
+    });
+
+    if (addedTemplates.length) {
+        renderActiveTemplateDetails();
+        markProjectAsDirty();
+    }
+
+    return addedTemplates;
+}
+
 function ensureProcessLinkModal() {
     if (processLinkState.modal) return processLinkState.modal;
 
@@ -1474,7 +1650,13 @@ function ensureProcessLinkModal() {
         });
     };
 
-    const linkFlow = (flow) => {
+    const linkFlow = async (flow) => {
+        const currentProjectId = saveProjectState.loadedProject?.id;
+        if (!currentProjectId) {
+            setStatus("Primero guarda o carga un proyecto de Code para poder vincularlo al flow.");
+            return;
+        }
+
         const payload = extractFlowPayload(flow);
         if (!payload) {
             setStatus("El flow seleccionado no contiene un JSON válido.");
@@ -1487,11 +1669,50 @@ function ensureProcessLinkModal() {
             return;
         }
 
-        setProjectName(getFlowDisplayName(flow));
-        setTemplates(templates, templates[0]?.name || "");
-        markProjectAsDirty();
-        setStatus(`Vinculación completada: ${templates.length} plantillas creadas.`, false);
-        modal.style.display = "none";
+        try {
+            registerSyncLog({ level: "info", stage: "link_flow", detail: `Intento de vinculación con flow ${flow?.id || "sin_id"}` });
+            setStatus("Vinculando proyecto con Process...", false);
+            const response = await fetch("/api/process-flows", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    flowId: flow?.id,
+                    projectId: currentProjectId,
+                    assignSyncCode: flow?.sync_code || saveProjectState.loadedProject?.sync_code || ""
+                })
+            });
+            if (!response.ok) {
+                let errorText = "No se pudo vincular el proyecto con Process";
+                try {
+                    const payload = await response.json();
+                    if (payload?.error) errorText = payload.error;
+                    if (Array.isArray(payload?.logs)) {
+                        payload.logs.forEach((entry) => registerSyncLog(entry));
+                    }
+                } catch (error) {
+                    errorText = errorText;
+                }
+                throw new Error(errorText);
+            }
+            const linked = await response.json();
+
+            setProjectName(getFlowDisplayName(flow));
+            setTemplates(templates, templates[0]?.name || "");
+            setLoadedProjectState({
+                ...saveProjectState.loadedProject,
+                sync_code: linked?.sync_code || "",
+                linked_flow_id: flow?.id || "",
+                linked_flow_name: getFlowDisplayName(flow)
+            });
+            markProjectAsDirty();
+            setStatus(`Vinculación completada: ${templates.length} plantillas creadas. sync_code ${linked?.sync_code || ""}.`, false);
+            modal.style.display = "none";
+        } catch (error) {
+            console.error(error);
+            setStatus(error?.message || "No se pudo completar la vinculación con Process.");
+        }
     };
 
     const renderFlows = () => {
@@ -1758,12 +1979,15 @@ function ensureLoadProjectModal() {
                         throw new Error("Proyecto inválido.");
                     }
                     applyProjectData(payload);
-                    saveProjectState.loadedProject = {
+                    setLoadedProjectState({
                         id: project.id || null,
                         proyecto: project.proyecto || "",
                         subfuncion: project.subfuncion || "",
-                        user: project.user || ""
-                    };
+                        user: project.user || "",
+                        sync_code: project.sync_code || data?.sync_code || "",
+                        linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
+                        linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+                    });
                     saveProjectState.activeSubfuncion = project.subfuncion || "";
                     setStatus("Proyecto cargado correctamente.", false);
                     markProjectAsSaved();
@@ -1882,6 +2106,116 @@ if (btnVincularProcess) {
         modal.style.display = "flex";
         if (typeof modal.loadSubfunciones === "function") {
             modal.loadSubfunciones();
+        }
+    });
+}
+
+if (btnSincronizarCode) {
+    btnSincronizarCode.addEventListener("click", async () => {
+        syncActiveTemplateMarkdown();
+        const linkedFlowId = saveProjectState.loadedProject?.linked_flow_id;
+        const syncCode = saveProjectState.loadedProject?.sync_code;
+        const projectId = saveProjectState.loadedProject?.id;
+
+        if (!projectId || !syncCode) {
+            alert("Este proyecto no está vinculado a un flow. Usa primero 'Vincular proyecto process'.");
+            return;
+        }
+
+        try {
+            registerSyncLog({ level: "info", stage: "sync_button", detail: `Intento de sync project=${projectId || "-"} sync_code=${syncCode || "-"}` });
+            const flowQuery = linkedFlowId
+                ? `id=${encodeURIComponent(linkedFlowId)}`
+                : `sync_code=${encodeURIComponent(syncCode)}`;
+            const flowResponse = await fetch(`/api/process-flows?${flowQuery}`);
+            if (!flowResponse.ok) {
+                let errorText = "No se pudo cargar el flow vinculado";
+                try {
+                    const payload = await flowResponse.json();
+                    if (payload?.error) errorText = payload.error;
+                } catch (error) {
+                    errorText = errorText;
+                }
+                throw new Error(errorText);
+            }
+            const flowRows = await flowResponse.json();
+            const flow = Array.isArray(flowRows) ? flowRows[0] : null;
+            if (!flow) {
+                throw new Error("Flow vinculado no encontrado");
+            }
+            const resolvedFlowId = flow?.id || linkedFlowId;
+            if (!resolvedFlowId) {
+                throw new Error("No se pudo resolver el flow a sincronizar");
+            }
+
+            const flowPayload = extractFlowPayload(flow);
+            if (!flowPayload) {
+                throw new Error("El flow vinculado no tiene JSON válido");
+            }
+
+            const addedTemplates = appendMissingTemplatesFromFlow(flowPayload);
+            if (addedTemplates.length) {
+                registerSyncLog({
+                    level: "info",
+                    stage: "sync_new_nodes",
+                    detail: `Se añadieron ${addedTemplates.length} plantillas vacías por nodos nuevos del flow`,
+                    extra: addedTemplates.map((tpl) => tpl.name)
+                });
+            }
+
+            const addedIds = new Set(addedTemplates.map((tpl) => tpl.id));
+            const templatesForSync = (projectState.templates || []).filter((tpl) => !addedIds.has(tpl.id));
+            const nextFlowPayload = mergeTemplatesIntoFlowPayload(flowPayload, templatesForSync);
+            const syncResponse = await fetch("/api/process-flows", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    flowId: resolvedFlowId,
+                    projectId,
+                    assignSyncCode: syncCode,
+                    flowJson: nextFlowPayload
+                })
+            });
+
+            if (!syncResponse.ok) {
+                let errorText = "No se pudo sincronizar con Process";
+                try {
+                    const payload = await syncResponse.json();
+                    if (payload?.error) errorText = payload.error;
+                    if (Array.isArray(payload?.logs)) {
+                        payload.logs.forEach((entry) => registerSyncLog(entry));
+                    }
+                } catch (error) {
+                    errorText = errorText;
+                }
+                registerSyncLog({ level: "error", stage: "sync_response", detail: errorText });
+                throw new Error(errorText);
+            }
+
+            try {
+                const payload = await syncResponse.json();
+                if (Array.isArray(payload?.logs)) {
+                    payload.logs.forEach((entry) => registerSyncLog(entry));
+                }
+            } catch (error) {
+                registerSyncLog({ level: "warning", stage: "sync_response_parse", detail: "No se pudo parsear respuesta JSON de sincronización" });
+            }
+
+            setLoadedProjectState({
+                ...saveProjectState.loadedProject,
+                linked_flow_id: resolvedFlowId,
+                linked_flow_name: getFlowDisplayName(flow)
+            });
+            const addedMsg = addedTemplates.length
+                ? ` Se añadieron ${addedTemplates.length} plantillas nuevas vacías en Code.`
+                : "";
+            alert(`Sincronización completada: las plantillas de Code se enviaron al flow vinculado.${addedMsg}`);
+        } catch (error) {
+            registerSyncLog({ level: "error", stage: "sync_button", detail: error?.message || "Error desconocido al sincronizar" });
+            console.error(error);
+            alert(error?.message || "No se pudo sincronizar con Process.");
         }
     });
 }

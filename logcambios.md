@@ -1,5 +1,43 @@
 # Log de cambios
 
+## v1.3.70 - 2026-03-12
+- En la acción **Sincronizar Code** ahora se revisan los nodos actuales del flow y se detectan nodos nuevos de tipo formulario/documento que todavía no existen en Code.
+- Los nodos nuevos detectados se crean automáticamente en Code como **plantillas vacías** para que queden disponibles en el proyecto.
+- Para evitar sobrescrituras no deseadas en el mismo clic, las plantillas nuevas vacías no se envían al flow en esa sincronización inicial; solo se añaden en Code.
+- Se añadió log de este evento en `gcSyncLog` (etapa `sync_new_nodes`) con el listado de plantillas creadas.
+- Se actualizó la versión visible de la app a `v1.3.70` y la versión del proyecto en `package.json` a `1.3.70`.
+
+## v1.3.69 - 2026-03-12
+- Se corrigió un nuevo fallo de sincronización con `Process_Flows`: se eliminó el intento de escribir en la columna inexistente `plantilla`.
+- El backend de `api/process-flows` ahora actualiza únicamente columnas válidas de `Process_Flows` (`flow` y `sync_code`) durante la consolidación.
+- El frontend dejó de enviar el campo `plantilla` en la petición de sincronización para evitar errores de esquema en Supabase.
+- Se actualizó la versión visible de la app a `v1.3.69` y la versión del proyecto en `package.json` a `1.3.69`.
+
+## v1.3.68 - 2026-03-12
+- Se corrigió la sincronización con `Process_Flows` para escribir el payload en la columna correcta `flow` (antes se intentaba usar `json`, que no existe en esa tabla).
+- El endpoint `api/process-flows` mantiene el flujo de logs y ahora registra explícitamente que consolida plantillas en la columna `flow`.
+- Se actualizó la versión visible de la app a `v1.3.68` y la versión del proyecto en `package.json` a `1.3.68`.
+
+## v1.3.67 - 2026-03-12
+- Se reforzó la sincronización de plantillas para insertar/crear estructura en el JSON del flow: además de `plantillas`, ahora se consolida `fichaProyecto.plantillas` y se actualizan campos de nodo (`plantillaTexto` y `data.plantilla` cuando aplica).
+- Se añadió trazabilidad de intentos y errores de sincronización con un log persistente en navegador (`localStorage`, clave `gcSyncLog`) y helper `window.getSyncLog()` para revisión de causas.
+- El endpoint `api/process-flows` ahora devuelve `logs` detallados por etapa (inicio, cálculo de `sync_code`, parches en tablas y errores) para facilitar diagnóstico de fallos en producción.
+- Se mejoró el manejo de errores en frontend mostrando el detalle real devuelto por API durante vinculación/sincronización en lugar de un mensaje genérico.
+- Se actualizó la versión visible de la app a `v1.3.67` y la versión del proyecto en `package.json` a `1.3.67`.
+
+## v1.3.66 - 2026-03-12
+- Se corrigió la acción del botón **"Sincronizar Code"** para evitar el error al invocar `api/process-flows`, usando una ruta compatible por `POST` en lugar de depender solo de `PATCH`.
+- La sincronización ahora puede resolver el flow por `sync_code` cuando no existe `linked_flow_id` en memoria (por ejemplo, tras recargar/cargar proyecto), evitando bloqueos por vínculo parcial.
+- El endpoint `api/process-flows` ahora acepta `POST` además de `PATCH` para vinculación/sincronización y permite filtrar por `sync_code` en `GET`.
+- Se actualizó la versión visible de la app a `v1.3.66` y la versión del proyecto en `package.json` a `1.3.66`.
+
+## v1.3.65 - 2026-03-12
+- Se implementó el vínculo técnico por `sync_code` entre `Code_Markdowns`, `Code_Markdowns_BACKUP` y `Process_Flows` al vincular un proyecto con un flow.
+- La vinculación ahora asigna (o reutiliza) un código correlativo común y lo consolida en las tres tablas para mantener enlazados proyecto, flow e histórico de backups.
+- Se añadió el botón lateral **"Sincronizar Code"** para proyectos ya vinculados: envía manualmente al flow las plantillas Markdown actuales de Code y actualiza `plantillas` del JSON del flow sin sincronización automática.
+- Se ampliaron los endpoints para exponer y persistir `sync_code` en proyectos y para soportar sincronización/vinculación vía `PATCH /api/process-flows`.
+- Se actualizó la versión visible de la app a `v1.3.65` y la versión del proyecto en `package.json` a `1.3.65`.
+
 ## v1.3.64 - 2026-03-12
 - Se corrigió la vinculación de Process para aceptar más formatos de payload del flow y evitar falsos "JSON inválido" cuando el contenido no llega en `json` sino en otras columnas (como `flow`, `data`, `payload`, etc.).
 - El extractor ahora intenta parseo robusto de cadenas (incluyendo recorte al bloque `{...}` cuando hay texto envolvente) y valida por estructura (`nodos`, `plantillas`, `conexiones` o `fichaProyecto`).
