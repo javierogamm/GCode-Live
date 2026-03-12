@@ -38,7 +38,7 @@ async function getNextSyncCode(logs) {
 
 async function syncFlowWithCode(req, res) {
   const logs = [];
-  const { flowId, projectId, assignSyncCode, flowJson } = req.body || {};
+  const { flowId, projectId, assignSyncCode, flowJson, forceRelink } = req.body || {};
   const normalizedFlowId = typeof flowId === "string" ? flowId.trim() : String(flowId || "").trim();
   const normalizedProjectId = typeof projectId === "string" ? projectId.trim() : String(projectId || "").trim();
 
@@ -53,10 +53,75 @@ async function syncFlowWithCode(req, res) {
   let syncCode = typeof assignSyncCode === "string" && assignSyncCode.trim()
     ? assignSyncCode.trim()
     : "";
+
+  let previousLinkedProject = null;
+  if (syncCode) {
+    const lookupLinkedProject = await supabaseFetch("Code_Markdowns", {
+      method: "GET",
+      query: `?select=id,proyecto,sync_code&sync_code=eq.${encodeURIComponent(syncCode)}&order=created_at.desc`
+    });
+    if (!lookupLinkedProject.ok) {
+      const detail = await lookupLinkedProject.text();
+      pushLog(logs, "lookup_existing_link", detail || "Error consultando proyecto ya vinculado", "error");
+      res.status(lookupLinkedProject.status).json({ error: detail || "Failed checking existing project link", logs });
+      return;
+    }
+    const linkedProjects = await lookupLinkedProject.json();
+    previousLinkedProject = Array.isArray(linkedProjects)
+      ? linkedProjects.find((row) => String(row?.id || "") !== normalizedProjectId)
+      : null;
+  }
+
+  if (previousLinkedProject && !forceRelink) {
+    const projectName = previousLinkedProject?.proyecto || "(sin nombre)";
+    pushLog(logs, "existing_link_detected", `El flow ya está vinculado al proyecto ${projectName}`);
+    res.status(409).json({
+      error: `El flow ya está vinculado al proyecto "${projectName}".`,
+      code: "FLOW_ALREADY_LINKED",
+      linked_project: {
+        id: previousLinkedProject.id,
+        proyecto: projectName,
+        sync_code: previousLinkedProject.sync_code || ""
+      },
+      logs
+    });
+    return;
+  }
+
   if (!syncCode) {
     syncCode = await getNextSyncCode(logs);
   } else {
     pushLog(logs, "sync_code", `Se reutiliza sync_code recibido: ${syncCode}`);
+  }
+
+  if (previousLinkedProject && forceRelink) {
+    const clearLinkedProject = await supabaseFetch("Code_Markdowns", {
+      method: "PATCH",
+      body: { sync_code: null },
+      query: `?id=eq.${encodeURIComponent(previousLinkedProject.id)}&select=id,sync_code`,
+      prefer: "return=representation"
+    });
+    if (!clearLinkedProject.ok) {
+      const detail = await clearLinkedProject.text();
+      pushLog(logs, "clear_previous_code_markdown", detail || "Error liberando sync_code del proyecto anterior", "error");
+      res.status(clearLinkedProject.status).json({ error: detail || "Failed clearing previous Code_Markdowns link", logs });
+      return;
+    }
+    pushLog(logs, "clear_previous_code_markdown", `Se liberó sync_code del proyecto previo ${previousLinkedProject.id}`);
+
+    const clearLinkedBackups = await supabaseFetch("Code_Markdowns_BACKUP", {
+      method: "PATCH",
+      body: { sync_code: null },
+      query: `?%22ID_Origen%22=eq.${encodeURIComponent(previousLinkedProject.id)}&select=id,sync_code`,
+      prefer: "return=representation"
+    });
+    if (!clearLinkedBackups.ok) {
+      const detail = await clearLinkedBackups.text();
+      pushLog(logs, "clear_previous_backups", detail || "Error liberando backup del proyecto anterior", "error");
+      res.status(clearLinkedBackups.status).json({ error: detail || "Failed clearing previous backup link", logs });
+      return;
+    }
+    pushLog(logs, "clear_previous_backups", `Se liberó sync_code en backups del proyecto previo ${previousLinkedProject.id}`);
   }
 
   const patchProject = await supabaseFetch("Code_Markdowns", {

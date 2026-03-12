@@ -1650,7 +1650,7 @@ function ensureProcessLinkModal() {
         });
     };
 
-    const linkFlow = async (flow) => {
+    const linkFlow = async (flow, forceRelink = false) => {
         const currentProjectId = saveProjectState.loadedProject?.id;
         if (!currentProjectId) {
             setStatus("Primero guarda o carga un proyecto de Code para poder vincularlo al flow.");
@@ -1680,13 +1680,15 @@ function ensureProcessLinkModal() {
                 body: JSON.stringify({
                     flowId: flow?.id,
                     projectId: currentProjectId,
-                    assignSyncCode: flow?.sync_code || saveProjectState.loadedProject?.sync_code || ""
+                    assignSyncCode: flow?.sync_code || saveProjectState.loadedProject?.sync_code || "",
+                    forceRelink
                 })
             });
             if (!response.ok) {
                 let errorText = "No se pudo vincular el proyecto con Process";
+                let payload = null;
                 try {
-                    const payload = await response.json();
+                    payload = await response.json();
                     if (payload?.error) errorText = payload.error;
                     if (Array.isArray(payload?.logs)) {
                         payload.logs.forEach((entry) => registerSyncLog(entry));
@@ -1694,6 +1696,18 @@ function ensureProcessLinkModal() {
                 } catch (error) {
                     errorText = errorText;
                 }
+
+                if (response.status === 409 && payload?.code === "FLOW_ALREADY_LINKED") {
+                    const linkedName = payload?.linked_project?.proyecto || "(sin nombre)";
+                    const confirmRelink = window.confirm(`El proyecto "${linkedName}" ya está vinculado a este flow. ¿Quieres reasignar la vinculación al proyecto actual?`);
+                    if (confirmRelink) {
+                        await linkFlow(flow, true);
+                        return;
+                    }
+                    setStatus("Vinculación cancelada por el usuario.");
+                    return;
+                }
+
                 throw new Error(errorText);
             }
             const linked = await response.json();

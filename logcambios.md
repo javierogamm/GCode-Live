@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.71 - 2026-03-12
+- La vinculación de Code con Process ahora verifica si el flow ya tiene un proyecto asociado por `sync_code` antes de completar la operación.
+- Si el flow ya estaba vinculado, la API responde conflicto controlado (`FLOW_ALREADY_LINKED`) devolviendo el nombre del proyecto ya asociado para permitir confirmación en cliente.
+- En la interfaz, al intentar vincular y detectar una vinculación previa, se muestra una confirmación: informa que el proyecto existente ya está vinculado y permite reasignar.
+- Si se confirma la reasignación, se elimina primero el `sync_code` del proyecto anterior (incluyendo sus backups) y luego se asigna al nuevo proyecto, manteniendo una única vinculación activa por flow.
+- Se actualizó la versión visible de la app a `v1.3.71` y la versión del proyecto en `package.json` a `1.3.71`.
+
 ## v1.3.70 - 2026-03-12
 - En la acción **Sincronizar Code** ahora se revisan los nodos actuales del flow y se detectan nodos nuevos de tipo formulario/documento que todavía no existen en Code.
 - Los nodos nuevos detectados se crean automáticamente en Code como **plantillas vacías** para que queden disponibles en el proyecto.
