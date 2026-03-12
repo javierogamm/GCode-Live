@@ -10,6 +10,7 @@ async function createBackupFromPayload(payload, sourceId) {
     plantilla: payload.plantilla,
     user: payload.user,
     subfuncion: payload.subfuncion,
+    sync_code: payload.sync_code || null,
     json: payload.json,
     fecha_guardado: new Date().toISOString(),
     ID_Origen: String(sourceId)
@@ -33,7 +34,7 @@ module.exports = async (req, res) => {
     try {
       const { subfuncion, nombre, proyecto, user } = req.query || {};
       const filters = [
-        "select=id,created_at,proyecto,plantilla,user,subfuncion",
+        "select=id,created_at,proyecto,plantilla,user,subfuncion,sync_code",
         "order=created_at.desc"
       ];
       const nombreProyecto = proyecto || nombre;
@@ -65,7 +66,7 @@ module.exports = async (req, res) => {
 
   if (req.method === "POST") {
     try {
-      const { proyecto, plantilla, user, subfuncion, json, overwrite } = req.body || {};
+      const { proyecto, plantilla, user, subfuncion, json, overwrite, sync_code } = req.body || {};
       if (!proyecto || !json) {
         res.status(400).json({ error: "Missing required fields" });
         return;
@@ -90,7 +91,14 @@ module.exports = async (req, res) => {
         return;
       }
       const lookupData = await lookupResponse.json();
-      const payload = { proyecto, plantilla, user: normalizedUser, subfuncion, json };
+      const payload = {
+        proyecto,
+        plantilla,
+        user: normalizedUser,
+        subfuncion,
+        json,
+        sync_code: sync_code || null
+      };
       let response = null;
       let sourceId = null;
 
@@ -109,14 +117,14 @@ module.exports = async (req, res) => {
         response = await supabaseFetch("Code_Markdowns", {
           method: "PATCH",
           body: payload,
-          query: `?id=eq.${encodeURIComponent(sourceId)}&select=id,created_at,proyecto,plantilla,user,subfuncion`,
+          query: `?id=eq.${encodeURIComponent(sourceId)}&select=id,created_at,proyecto,plantilla,user,subfuncion,sync_code`,
           prefer: "return=representation"
         });
       } else {
         response = await supabaseFetch("Code_Markdowns", {
           method: "POST",
           body: payload,
-          query: "?select=id,created_at,proyecto,plantilla,user,subfuncion",
+          query: "?select=id,created_at,proyecto,plantilla,user,subfuncion,sync_code",
           prefer: "return=representation"
         });
       }

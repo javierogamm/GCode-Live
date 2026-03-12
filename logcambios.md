@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.65 - 2026-03-12
+- Se implementó el vínculo técnico por `sync_code` entre `Code_Markdowns`, `Code_Markdowns_BACKUP` y `Process_Flows` al vincular un proyecto con un flow.
+- La vinculación ahora asigna (o reutiliza) un código correlativo común y lo consolida en las tres tablas para mantener enlazados proyecto, flow e histórico de backups.
+- Se añadió el botón lateral **"Sincronizar Code"** para proyectos ya vinculados: envía manualmente al flow las plantillas Markdown actuales de Code y actualiza `plantillas` del JSON del flow sin sincronización automática.
+- Se ampliaron los endpoints para exponer y persistir `sync_code` en proyectos y para soportar sincronización/vinculación vía `PATCH /api/process-flows`.
+- Se actualizó la versión visible de la app a `v1.3.65` y la versión del proyecto en `package.json` a `1.3.65`.
+
 ## v1.3.64 - 2026-03-12
 - Se corrigió la vinculación de Process para aceptar más formatos de payload del flow y evitar falsos "JSON inválido" cuando el contenido no llega en `json` sino en otras columnas (como `flow`, `data`, `payload`, etc.).
 - El extractor ahora intenta parseo robusto de cadenas (incluyendo recorte al bloque `{...}` cuando hay texto envolvente) y valida por estructura (`nodos`, `plantillas`, `conexiones` o `fichaProyecto`).
