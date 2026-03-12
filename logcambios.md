@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.70 - 2026-03-12
+- En la acción **Sincronizar Code** ahora se revisan los nodos actuales del flow y se detectan nodos nuevos de tipo formulario/documento que todavía no existen en Code.
+- Los nodos nuevos detectados se crean automáticamente en Code como **plantillas vacías** para que queden disponibles en el proyecto.
+- Para evitar sobrescrituras no deseadas en el mismo clic, las plantillas nuevas vacías no se envían al flow en esa sincronización inicial; solo se añaden en Code.
+- Se añadió log de este evento en `gcSyncLog` (etapa `sync_new_nodes`) con el listado de plantillas creadas.
+- Se actualizó la versión visible de la app a `v1.3.70` y la versión del proyecto en `package.json` a `1.3.70`.
+
 ## v1.3.69 - 2026-03-12
 - Se corrigió un nuevo fallo de sincronización con `Process_Flows`: se eliminó el intento de escribir en la columna inexistente `plantilla`.
 - El backend de `api/process-flows` ahora actualiza únicamente columnas válidas de `Process_Flows` (`flow` y `sync_code`) durante la consolidación.

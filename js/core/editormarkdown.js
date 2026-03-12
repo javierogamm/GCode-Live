@@ -1544,6 +1544,48 @@ function mergeTemplatesIntoFlowPayload(flowPayload = {}, templates = []) {
     return nextPayload;
 }
 
+function appendMissingTemplatesFromFlow(flowPayload = {}) {
+    const nodes = Array.isArray(flowPayload?.nodos) ? flowPayload.nodos : [];
+    const allowedTypes = new Set(["formulario", "documento"]);
+    const existingNames = new Set(
+        (projectState.templates || [])
+            .map((tpl) => (tpl?.name || "").trim().toLowerCase())
+            .filter(Boolean)
+    );
+
+    const addedTemplates = [];
+    let index = 1;
+    nodes.forEach((node) => {
+        const nodeType = String(node?.tipo || "").toLowerCase();
+        if (!allowedTypes.has(nodeType)) return;
+
+        const rawName = (node?.titulo || node?.nombre || node?.name || node?.id || `Plantilla ${index}`).toString().trim();
+        index += 1;
+        if (!rawName) return;
+
+        const normalized = rawName.toLowerCase();
+        if (existingNames.has(normalized)) return;
+
+        const finalName = getUniqueTemplateName(rawName);
+        const template = {
+            id: createTemplateId(),
+            name: finalName,
+            type: nodeType === "formulario" ? "Formulario" : "Documento",
+            markdown: ""
+        };
+        projectState.templates.push(template);
+        existingNames.add(finalName.toLowerCase());
+        addedTemplates.push(template);
+    });
+
+    if (addedTemplates.length) {
+        renderActiveTemplateDetails();
+        markProjectAsDirty();
+    }
+
+    return addedTemplates;
+}
+
 function ensureProcessLinkModal() {
     if (processLinkState.modal) return processLinkState.modal;
 
@@ -2111,7 +2153,19 @@ if (btnSincronizarCode) {
                 throw new Error("El flow vinculado no tiene JSON válido");
             }
 
-            const nextFlowPayload = mergeTemplatesIntoFlowPayload(flowPayload, projectState.templates);
+            const addedTemplates = appendMissingTemplatesFromFlow(flowPayload);
+            if (addedTemplates.length) {
+                registerSyncLog({
+                    level: "info",
+                    stage: "sync_new_nodes",
+                    detail: `Se añadieron ${addedTemplates.length} plantillas vacías por nodos nuevos del flow`,
+                    extra: addedTemplates.map((tpl) => tpl.name)
+                });
+            }
+
+            const addedIds = new Set(addedTemplates.map((tpl) => tpl.id));
+            const templatesForSync = (projectState.templates || []).filter((tpl) => !addedIds.has(tpl.id));
+            const nextFlowPayload = mergeTemplatesIntoFlowPayload(flowPayload, templatesForSync);
             const syncResponse = await fetch("/api/process-flows", {
                 method: "POST",
                 headers: {
@@ -2154,7 +2208,10 @@ if (btnSincronizarCode) {
                 linked_flow_id: resolvedFlowId,
                 linked_flow_name: getFlowDisplayName(flow)
             });
-            alert("Sincronización completada: las plantillas de Code se enviaron al flow vinculado.");
+            const addedMsg = addedTemplates.length
+                ? ` Se añadieron ${addedTemplates.length} plantillas nuevas vacías en Code.`
+                : "";
+            alert(`Sincronización completada: las plantillas de Code se enviaron al flow vinculado.${addedMsg}`);
         } catch (error) {
             registerSyncLog({ level: "error", stage: "sync_button", detail: error?.message || "Error desconocido al sincronizar" });
             console.error(error);
