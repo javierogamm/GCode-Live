@@ -2112,7 +2112,6 @@ if (btnSincronizarCode) {
             }
 
             const nextFlowPayload = mergeTemplatesIntoFlowPayload(flowPayload, projectState.templates);
-            const plantillaResumen = composePlantillaResumen();
             const syncResponse = await fetch("/api/process-flows", {
                 method: "POST",
                 headers: {
@@ -2122,8 +2121,7 @@ if (btnSincronizarCode) {
                     flowId: resolvedFlowId,
                     projectId,
                     assignSyncCode: syncCode,
-                    flowJson: nextFlowPayload,
-                    plantilla: plantillaResumen
+                    flowJson: nextFlowPayload
                 })
             });
 

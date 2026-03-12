@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.69 - 2026-03-12
+- Se corrigió un nuevo fallo de sincronización con `Process_Flows`: se eliminó el intento de escribir en la columna inexistente `plantilla`.
+- El backend de `api/process-flows` ahora actualiza únicamente columnas válidas de `Process_Flows` (`flow` y `sync_code`) durante la consolidación.
+- El frontend dejó de enviar el campo `plantilla` en la petición de sincronización para evitar errores de esquema en Supabase.
+- Se actualizó la versión visible de la app a `v1.3.69` y la versión del proyecto en `package.json` a `1.3.69`.
+
 ## v1.3.68 - 2026-03-12
 - Se corrigió la sincronización con `Process_Flows` para escribir el payload en la columna correcta `flow` (antes se intentaba usar `json`, que no existe en esa tabla).
 - El endpoint `api/process-flows` mantiene el flujo de logs y ahora registra explícitamente que consolida plantillas en la columna `flow`.

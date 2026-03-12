@@ -38,7 +38,7 @@ async function getNextSyncCode(logs) {
 
 async function syncFlowWithCode(req, res) {
   const logs = [];
-  const { flowId, projectId, assignSyncCode, flowJson, plantilla } = req.body || {};
+  const { flowId, projectId, assignSyncCode, flowJson } = req.body || {};
   const normalizedFlowId = typeof flowId === "string" ? flowId.trim() : String(flowId || "").trim();
   const normalizedProjectId = typeof projectId === "string" ? projectId.trim() : String(projectId || "").trim();
 
@@ -92,9 +92,6 @@ async function syncFlowWithCode(req, res) {
   if (flowJson !== undefined) {
     flowBody.flow = flowJson;
     pushLog(logs, "flow_payload", "Se incluye payload en columna flow para consolidar plantillas");
-  }
-  if (typeof plantilla === "string") {
-    flowBody.plantilla = plantilla;
   }
 
   const patchFlow = await supabaseFetch("Process_Flows", {
