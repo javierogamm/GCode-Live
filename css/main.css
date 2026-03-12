@@ -1559,6 +1559,15 @@ body {
   background: #b91c1c;
 }
 
+
+.load-project-action-history {
+  background: #7c3aed;
+}
+
+.load-project-action-history:hover {
+  background: #6d28d9;
+}
+
 /* =============================
    MODAL PLANTILLAS
    ============================= */
