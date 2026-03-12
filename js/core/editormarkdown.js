@@ -18,6 +18,40 @@ const projectNameInput = document.getElementById("projectNameInput");
 const templateNameInput = document.getElementById("templateNameInput");
 const templateTypeSelect = document.getElementById("templateTypeSelect");
 
+const SYNC_LOG_STORAGE_KEY = "gcSyncLog";
+
+function registerSyncLog(event = {}) {
+    const entry = {
+        at: new Date().toISOString(),
+        level: event.level || "info",
+        stage: event.stage || "general",
+        detail: event.detail || "",
+        extra: event.extra || null
+    };
+    try {
+        const existing = JSON.parse(localStorage.getItem(SYNC_LOG_STORAGE_KEY) || "[]");
+        const next = Array.isArray(existing) ? existing : [];
+        next.unshift(entry);
+        localStorage.setItem(SYNC_LOG_STORAGE_KEY, JSON.stringify(next.slice(0, 200)));
+    } catch (error) {
+        console.warn("No se pudo persistir gcSyncLog", error);
+    }
+    if (entry.level === "error") {
+        console.error("[SYNC]", entry.stage, entry.detail, entry.extra || "");
+    } else {
+        console.log("[SYNC]", entry.stage, entry.detail, entry.extra || "");
+    }
+}
+
+window.getSyncLog = () => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(SYNC_LOG_STORAGE_KEY) || "[]");
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
+    }
+};
+
 function getCurrentAuthUserName() {
     const stored = localStorage.getItem("gcUser");
     if (!stored) return "";
@@ -1443,22 +1477,70 @@ function mergeTemplatesIntoFlowPayload(flowPayload = {}, templates = []) {
             ? { ...flowPayload.plantillas }
             : {}
     };
+    if (!nextPayload.fichaProyecto || typeof nextPayload.fichaProyecto !== "object") {
+        nextPayload.fichaProyecto = {};
+    }
+    if (!Array.isArray(nextPayload.fichaProyecto.plantillas)) {
+        nextPayload.fichaProyecto.plantillas = [];
+    }
+
     const nodes = Array.isArray(nextPayload.nodos) ? nextPayload.nodos : [];
-    const nodeByTitle = new Map();
+    const nodeByAlias = new Map();
     nodes.forEach((node) => {
-        const key = (node?.titulo || "").trim().toLowerCase();
-        if (key && !nodeByTitle.has(key)) {
-            nodeByTitle.set(key, node);
-        }
+        const aliases = [node?.titulo, node?.nombre, node?.name, node?.id]
+            .map((value) => (value || "").toString().trim().toLowerCase())
+            .filter(Boolean);
+        aliases.forEach((alias) => {
+            if (!nodeByAlias.has(alias)) {
+                nodeByAlias.set(alias, node);
+            }
+        });
     });
+
+    const upsertFichaPlantilla = (template, nodeId) => {
+        const normalizedName = (template?.name || "").trim();
+        if (!normalizedName) return;
+        const existingIdx = nextPayload.fichaProyecto.plantillas.findIndex((item) => {
+            const name = (item?.nombre || item?.name || "").toString().trim().toLowerCase();
+            return name === normalizedName.toLowerCase();
+        });
+        const entry = {
+            nombre: normalizedName,
+            tipo: normalizeTemplateType(template?.type || "Documento"),
+            markdown: typeof template?.markdown === "string" ? template.markdown : "",
+            nodo_id: nodeId || ""
+        };
+        if (existingIdx >= 0) {
+            nextPayload.fichaProyecto.plantillas[existingIdx] = {
+                ...nextPayload.fichaProyecto.plantillas[existingIdx],
+                ...entry
+            };
+        } else {
+            nextPayload.fichaProyecto.plantillas.push(entry);
+        }
+    };
 
     templates.forEach((template) => {
         const templateName = (template?.name || "").trim().toLowerCase();
         if (!templateName) return;
-        const node = nodeByTitle.get(templateName);
-        if (!node?.id) return;
-        nextPayload.plantillas[node.id] = typeof template?.markdown === "string" ? template.markdown : "";
+        const markdown = typeof template?.markdown === "string" ? template.markdown : "";
+        const node = nodeByAlias.get(templateName);
+
+        if (node?.id) {
+            nextPayload.plantillas[node.id] = markdown;
+            node.plantillaTexto = markdown;
+            if (node.data && typeof node.data === "object") {
+                node.data.plantilla = markdown;
+            }
+            upsertFichaPlantilla(template, node.id);
+            return;
+        }
+
+        const fallbackKey = `code_template_${templateName.replace(/\s+/g, "_")}`;
+        nextPayload.plantillas[fallbackKey] = markdown;
+        upsertFichaPlantilla(template, "");
     });
+
     return nextPayload;
 }
 
@@ -1546,6 +1628,7 @@ function ensureProcessLinkModal() {
         }
 
         try {
+            registerSyncLog({ level: "info", stage: "link_flow", detail: `Intento de vinculación con flow ${flow?.id || "sin_id"}` });
             setStatus("Vinculando proyecto con Process...", false);
             const response = await fetch("/api/process-flows", {
                 method: "POST",
@@ -1559,7 +1642,17 @@ function ensureProcessLinkModal() {
                 })
             });
             if (!response.ok) {
-                throw new Error("No se pudo vincular el proyecto con Process");
+                let errorText = "No se pudo vincular el proyecto con Process";
+                try {
+                    const payload = await response.json();
+                    if (payload?.error) errorText = payload.error;
+                    if (Array.isArray(payload?.logs)) {
+                        payload.logs.forEach((entry) => registerSyncLog(entry));
+                    }
+                } catch (error) {
+                    errorText = errorText;
+                }
+                throw new Error(errorText);
             }
             const linked = await response.json();
 
@@ -1576,7 +1669,7 @@ function ensureProcessLinkModal() {
             modal.style.display = "none";
         } catch (error) {
             console.error(error);
-            setStatus("No se pudo completar la vinculación con Process.");
+            setStatus(error?.message || "No se pudo completar la vinculación con Process.");
         }
     };
 
@@ -1988,12 +2081,20 @@ if (btnSincronizarCode) {
         }
 
         try {
+            registerSyncLog({ level: "info", stage: "sync_button", detail: `Intento de sync project=${projectId || "-"} sync_code=${syncCode || "-"}` });
             const flowQuery = linkedFlowId
                 ? `id=${encodeURIComponent(linkedFlowId)}`
                 : `sync_code=${encodeURIComponent(syncCode)}`;
             const flowResponse = await fetch(`/api/process-flows?${flowQuery}`);
             if (!flowResponse.ok) {
-                throw new Error("No se pudo cargar el flow vinculado");
+                let errorText = "No se pudo cargar el flow vinculado";
+                try {
+                    const payload = await flowResponse.json();
+                    if (payload?.error) errorText = payload.error;
+                } catch (error) {
+                    errorText = errorText;
+                }
+                throw new Error(errorText);
             }
             const flowRows = await flowResponse.json();
             const flow = Array.isArray(flowRows) ? flowRows[0] : null;
@@ -2027,7 +2128,27 @@ if (btnSincronizarCode) {
             });
 
             if (!syncResponse.ok) {
-                throw new Error("No se pudo sincronizar con Process");
+                let errorText = "No se pudo sincronizar con Process";
+                try {
+                    const payload = await syncResponse.json();
+                    if (payload?.error) errorText = payload.error;
+                    if (Array.isArray(payload?.logs)) {
+                        payload.logs.forEach((entry) => registerSyncLog(entry));
+                    }
+                } catch (error) {
+                    errorText = errorText;
+                }
+                registerSyncLog({ level: "error", stage: "sync_response", detail: errorText });
+                throw new Error(errorText);
+            }
+
+            try {
+                const payload = await syncResponse.json();
+                if (Array.isArray(payload?.logs)) {
+                    payload.logs.forEach((entry) => registerSyncLog(entry));
+                }
+            } catch (error) {
+                registerSyncLog({ level: "warning", stage: "sync_response_parse", detail: "No se pudo parsear respuesta JSON de sincronización" });
             }
 
             setLoadedProjectState({
@@ -2037,8 +2158,9 @@ if (btnSincronizarCode) {
             });
             alert("Sincronización completada: las plantillas de Code se enviaron al flow vinculado.");
         } catch (error) {
+            registerSyncLog({ level: "error", stage: "sync_button", detail: error?.message || "Error desconocido al sincronizar" });
             console.error(error);
-            alert("No se pudo sincronizar con Process.");
+            alert(error?.message || "No se pudo sincronizar con Process.");
         }
     });
 }

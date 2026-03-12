@@ -1,6 +1,15 @@
 const { supabaseFetch } = require("./_supabase");
 
-async function getNextSyncCode() {
+function pushLog(logs, stage, detail, level = "info") {
+  logs.push({
+    at: new Date().toISOString(),
+    level,
+    stage,
+    detail
+  });
+}
+
+async function getNextSyncCode(logs) {
   const sources = [
     { path: "Code_Markdowns", query: "?select=sync_code&sync_code=not.is.null&order=sync_code.desc&limit=1" },
     { path: "Code_Markdowns_BACKUP", query: "?select=sync_code&sync_code=not.is.null&order=sync_code.desc&limit=1" },
@@ -12,6 +21,7 @@ async function getNextSyncCode() {
     const response = await supabaseFetch(source.path, { method: "GET", query: source.query });
     if (!response.ok) {
       const detail = await response.text();
+      pushLog(logs, "get_next_sync_code", `Error leyendo ${source.path}: ${detail || "sin detalle"}`, "error");
       throw new Error(detail || `Error reading ${source.path}`);
     }
     const data = await response.json();
@@ -21,16 +31,22 @@ async function getNextSyncCode() {
     }
   }
 
-  return String(maxCode + 1);
+  const nextCode = String(maxCode + 1);
+  pushLog(logs, "get_next_sync_code", `Nuevo sync_code calculado: ${nextCode}`);
+  return nextCode;
 }
 
 async function syncFlowWithCode(req, res) {
+  const logs = [];
   const { flowId, projectId, assignSyncCode, flowJson, plantilla } = req.body || {};
   const normalizedFlowId = typeof flowId === "string" ? flowId.trim() : String(flowId || "").trim();
   const normalizedProjectId = typeof projectId === "string" ? projectId.trim() : String(projectId || "").trim();
 
+  pushLog(logs, "sync_start", `Inicio de sincronización flow=${normalizedFlowId || "-"} project=${normalizedProjectId || "-"}`);
+
   if (!normalizedFlowId || !normalizedProjectId) {
-    res.status(400).json({ error: "Missing flowId or projectId" });
+    pushLog(logs, "validate", "Faltan flowId o projectId", "error");
+    res.status(400).json({ error: "Missing flowId or projectId", logs });
     return;
   }
 
@@ -38,7 +54,9 @@ async function syncFlowWithCode(req, res) {
     ? assignSyncCode.trim()
     : "";
   if (!syncCode) {
-    syncCode = await getNextSyncCode();
+    syncCode = await getNextSyncCode(logs);
+  } else {
+    pushLog(logs, "sync_code", `Se reutiliza sync_code recibido: ${syncCode}`);
   }
 
   const patchProject = await supabaseFetch("Code_Markdowns", {
@@ -50,9 +68,11 @@ async function syncFlowWithCode(req, res) {
 
   if (!patchProject.ok) {
     const detail = await patchProject.text();
-    res.status(patchProject.status).json({ error: detail || "Failed updating Code_Markdowns" });
+    pushLog(logs, "patch_code_markdowns", detail || "Error actualizando Code_Markdowns", "error");
+    res.status(patchProject.status).json({ error: detail || "Failed updating Code_Markdowns", logs });
     return;
   }
+  pushLog(logs, "patch_code_markdowns", "Code_Markdowns actualizado");
 
   const patchBackup = await supabaseFetch("Code_Markdowns_BACKUP", {
     method: "PATCH",
@@ -62,13 +82,16 @@ async function syncFlowWithCode(req, res) {
   });
   if (!patchBackup.ok) {
     const detail = await patchBackup.text();
-    res.status(patchBackup.status).json({ error: detail || "Failed updating Code_Markdowns_BACKUP" });
+    pushLog(logs, "patch_code_markdowns_backup", detail || "Error actualizando backup", "error");
+    res.status(patchBackup.status).json({ error: detail || "Failed updating Code_Markdowns_BACKUP", logs });
     return;
   }
+  pushLog(logs, "patch_code_markdowns_backup", "Backups actualizados");
 
   const flowBody = { sync_code: syncCode };
   if (flowJson !== undefined) {
     flowBody.json = flowJson;
+    pushLog(logs, "flow_payload", "Se incluye json de flow para consolidar plantillas");
   }
   if (typeof plantilla === "string") {
     flowBody.plantilla = plantilla;
@@ -82,19 +105,23 @@ async function syncFlowWithCode(req, res) {
   });
   if (!patchFlow.ok) {
     const detail = await patchFlow.text();
-    res.status(patchFlow.status).json({ error: detail || "Failed updating Process_Flows" });
+    pushLog(logs, "patch_process_flows", detail || "Error actualizando Process_Flows", "error");
+    res.status(patchFlow.status).json({ error: detail || "Failed updating Process_Flows", logs });
     return;
   }
+  pushLog(logs, "patch_process_flows", "Process_Flows actualizado");
 
   const projectRows = await patchProject.json();
   const backupRows = await patchBackup.json();
   const flowRows = await patchFlow.json();
 
+  pushLog(logs, "sync_complete", "Sincronización finalizada correctamente");
   res.status(200).json({
     sync_code: syncCode,
     code_markdowns: Array.isArray(projectRows) ? projectRows[0] || null : projectRows,
     backups_updated: Array.isArray(backupRows) ? backupRows.length : 0,
-    process_flow: Array.isArray(flowRows) ? flowRows[0] || null : flowRows
+    process_flow: Array.isArray(flowRows) ? flowRows[0] || null : flowRows,
+    logs
   });
 }
 

@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.67 - 2026-03-12
+- Se reforzó la sincronización de plantillas para insertar/crear estructura en el JSON del flow: además de `plantillas`, ahora se consolida `fichaProyecto.plantillas` y se actualizan campos de nodo (`plantillaTexto` y `data.plantilla` cuando aplica).
+- Se añadió trazabilidad de intentos y errores de sincronización con un log persistente en navegador (`localStorage`, clave `gcSyncLog`) y helper `window.getSyncLog()` para revisión de causas.
+- El endpoint `api/process-flows` ahora devuelve `logs` detallados por etapa (inicio, cálculo de `sync_code`, parches en tablas y errores) para facilitar diagnóstico de fallos en producción.
+- Se mejoró el manejo de errores en frontend mostrando el detalle real devuelto por API durante vinculación/sincronización en lugar de un mensaje genérico.
+- Se actualizó la versión visible de la app a `v1.3.67` y la versión del proyecto en `package.json` a `1.3.67`.
+
 ## v1.3.66 - 2026-03-12
 - Se corrigió la acción del botón **"Sincronizar Code"** para evitar el error al invocar `api/process-flows`, usando una ruta compatible por `POST` en lugar de depender solo de `PATCH`.
 - La sincronización ahora puede resolver el flow por `sync_code` cuando no existe `linked_flow_id` en memoria (por ejemplo, tras recargar/cargar proyecto), evitando bloqueos por vínculo parcial.
