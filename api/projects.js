@@ -32,7 +32,7 @@ async function createBackupFromPayload(payload, sourceId) {
 module.exports = async (req, res) => {
   if (req.method === "GET") {
     try {
-      const { subfuncion, nombre, proyecto, user } = req.query || {};
+      const { subfuncion, nombre, proyecto, user, sync_code } = req.query || {};
       const filters = [
         "select=id,created_at,proyecto,plantilla,user,subfuncion,sync_code",
         "order=created_at.desc"
@@ -46,6 +46,9 @@ module.exports = async (req, res) => {
       }
       if (user) {
         filters.push(`user=eq.${encodeURIComponent(user)}`);
+      }
+      if (sync_code) {
+        filters.push(`sync_code=eq.${encodeURIComponent(sync_code)}`);
       }
       const query = `?${filters.join("&")}`;
       const response = await supabaseFetch("Code_Markdowns", { method: "GET", query });

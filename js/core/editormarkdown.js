@@ -17,6 +17,7 @@ const btnValidarTesauros = document.getElementById("btnValidarTesauros");
 const projectNameInput = document.getElementById("projectNameInput");
 const templateNameInput = document.getElementById("templateNameInput");
 const templateTypeSelect = document.getElementById("templateTypeSelect");
+const linkedFlowInfo = document.getElementById("linkedFlowInfo");
 
 const SYNC_LOG_STORAGE_KEY = "gcSyncLog";
 
@@ -616,9 +617,18 @@ const saveProjectState = {
     loadedProject: null
 };
 
+function updateLinkedFlowInfo() {
+    if (!linkedFlowInfo) return;
+    const linkedName = saveProjectState.loadedProject?.linked_flow_name || "";
+    linkedFlowInfo.textContent = linkedName
+        ? `Flow vinculado: ${linkedName}`
+        : "Flow vinculado: sin vínculo";
+}
+
 function setLoadedProjectState(next = null) {
     if (!next || typeof next !== "object") {
         saveProjectState.loadedProject = null;
+        updateLinkedFlowInfo();
         return;
     }
     saveProjectState.loadedProject = {
@@ -630,11 +640,40 @@ function setLoadedProjectState(next = null) {
         linked_flow_id: next.linked_flow_id || "",
         linked_flow_name: next.linked_flow_name || ""
     };
+    updateLinkedFlowInfo();
 }
+
+async function resolveLinkedFlowMeta(syncCode = "") {
+    const normalizedSyncCode = (syncCode || "").toString().trim();
+    if (!normalizedSyncCode) {
+        return { linked_flow_id: "", linked_flow_name: "" };
+    }
+
+    try {
+        const response = await fetch(`/api/process-flows?sync_code=${encodeURIComponent(normalizedSyncCode)}`);
+        if (!response.ok) {
+            return { linked_flow_id: "", linked_flow_name: "" };
+        }
+        const rows = await response.json();
+        const flow = Array.isArray(rows) ? rows[0] : null;
+        if (!flow) {
+            return { linked_flow_id: "", linked_flow_name: "" };
+        }
+        return {
+            linked_flow_id: flow?.id || "",
+            linked_flow_name: getFlowDisplayName(flow)
+        };
+    } catch (error) {
+        return { linked_flow_id: "", linked_flow_name: "" };
+    }
+}
+
 
 const unsavedChangesState = {
     dirty: false
 };
+
+updateLinkedFlowInfo();
 
 function markProjectAsDirty() {
     unsavedChangesState.dirty = true;
@@ -1657,19 +1696,82 @@ function ensureProcessLinkModal() {
             return;
         }
 
-        const payload = extractFlowPayload(flow);
-        if (!payload) {
-            setStatus("El flow seleccionado no contiene un JSON válido.");
-            return;
-        }
+        const isReplacingLinkedFlow = Boolean(
+            saveProjectState.loadedProject?.linked_flow_id
+            && flow?.id
+            && saveProjectState.loadedProject.linked_flow_id !== flow.id
+        );
 
-        const templates = buildTemplatesFromFlow(payload);
-        if (!templates.length) {
-            setStatus("No hay nodos formulario/documento con plantilla disponible.");
-            return;
+        if (isReplacingLinkedFlow) {
+            const confirmation = window.confirm(`Este proyecto ya está vinculado a "${saveProjectState.loadedProject?.linked_flow_name || saveProjectState.loadedProject?.linked_flow_id}".
+
+Si continúas, se sustituirá la vinculación actual y se asignará un nuevo SYNC al flow seleccionado.
+
+¿Deseas continuar?`);
+            if (!confirmation) {
+                return;
+            }
         }
 
         try {
+            if (flow?.sync_code) {
+                setStatus("Buscando proyecto de Code vinculado al flow seleccionado...", false);
+                const linkedProjectsResponse = await fetch(`/api/projects?sync_code=${encodeURIComponent(flow.sync_code)}`);
+                if (!linkedProjectsResponse.ok) {
+                    throw new Error("No se pudieron consultar los proyectos vinculados por SYNC.");
+                }
+                const linkedProjects = await linkedProjectsResponse.json();
+                const linkedProject = Array.isArray(linkedProjects) ? linkedProjects[0] : null;
+
+                if (linkedProject?.id) {
+                    const linkedProjectResponse = await fetch(`/api/project?id=${encodeURIComponent(linkedProject.id)}`);
+                    if (!linkedProjectResponse.ok) {
+                        throw new Error("Se encontró vínculo, pero no se pudo cargar el proyecto de Code.");
+                    }
+                    const linkedProjectDetail = await linkedProjectResponse.json();
+                    let linkedPayload = linkedProjectDetail?.json;
+                    if (typeof linkedPayload === "string") {
+                        linkedPayload = JSON.parse(linkedPayload);
+                    }
+                    if (!linkedPayload || typeof linkedPayload !== "object") {
+                        throw new Error("El proyecto de Code vinculado es inválido.");
+                    }
+
+                    applyProjectData(linkedPayload);
+                    const resolvedLinkedSyncCode = flow.sync_code || linkedProject.sync_code || "";
+                    const linkedFlowMeta = {
+                        linked_flow_id: flow?.id || "",
+                        linked_flow_name: getFlowDisplayName(flow)
+                    };
+                    setLoadedProjectState({
+                        id: linkedProject.id || null,
+                        proyecto: linkedProject.proyecto || "",
+                        subfuncion: linkedProject.subfuncion || "",
+                        user: linkedProject.user || "",
+                        sync_code: resolvedLinkedSyncCode,
+                        linked_flow_id: linkedFlowMeta.linked_flow_id,
+                        linked_flow_name: linkedFlowMeta.linked_flow_name
+                    });
+                    saveProjectState.activeSubfuncion = linkedProject.subfuncion || "";
+                    markProjectAsSaved();
+                    setStatus("Proyecto de Code vinculado cargado correctamente.", false);
+                    modal.style.display = "none";
+                    return;
+                }
+            }
+
+            const payload = extractFlowPayload(flow);
+            if (!payload) {
+                setStatus("El flow seleccionado no contiene un JSON válido.");
+                return;
+            }
+
+            const templates = buildTemplatesFromFlow(payload);
+            if (!templates.length) {
+                setStatus("No hay nodos formulario/documento con plantilla disponible.");
+                return;
+            }
+
             registerSyncLog({ level: "info", stage: "link_flow", detail: `Intento de vinculación con flow ${flow?.id || "sin_id"}` });
             setStatus("Vinculando proyecto con Process...", false);
             const response = await fetch("/api/process-flows", {
@@ -1680,16 +1782,18 @@ function ensureProcessLinkModal() {
                 body: JSON.stringify({
                     flowId: flow?.id,
                     projectId: currentProjectId,
-                    assignSyncCode: flow?.sync_code || saveProjectState.loadedProject?.sync_code || ""
+                    assignSyncCode: isReplacingLinkedFlow
+                        ? ""
+                        : (flow?.sync_code || saveProjectState.loadedProject?.sync_code || "")
                 })
             });
             if (!response.ok) {
                 let errorText = "No se pudo vincular el proyecto con Process";
                 try {
-                    const payload = await response.json();
-                    if (payload?.error) errorText = payload.error;
-                    if (Array.isArray(payload?.logs)) {
-                        payload.logs.forEach((entry) => registerSyncLog(entry));
+                    const payloadResponse = await response.json();
+                    if (payloadResponse?.error) errorText = payloadResponse.error;
+                    if (Array.isArray(payloadResponse?.logs)) {
+                        payloadResponse.logs.forEach((entry) => registerSyncLog(entry));
                     }
                 } catch (error) {
                     errorText = errorText;
@@ -1979,14 +2083,16 @@ function ensureLoadProjectModal() {
                         throw new Error("Proyecto inválido.");
                     }
                     applyProjectData(payload);
+                    const resolvedSyncCode = project.sync_code || data?.sync_code || "";
+                    const linkedFlowMeta = await resolveLinkedFlowMeta(resolvedSyncCode);
                     setLoadedProjectState({
                         id: project.id || null,
                         proyecto: project.proyecto || "",
                         subfuncion: project.subfuncion || "",
                         user: project.user || "",
-                        sync_code: project.sync_code || data?.sync_code || "",
-                        linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
-                        linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+                        sync_code: resolvedSyncCode,
+                        linked_flow_id: linkedFlowMeta.linked_flow_id || "",
+                        linked_flow_name: linkedFlowMeta.linked_flow_name || ""
                     });
                     saveProjectState.activeSubfuncion = project.subfuncion || "";
                     setStatus("Proyecto cargado correctamente.", false);
