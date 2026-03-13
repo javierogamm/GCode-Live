@@ -643,6 +643,32 @@ function setLoadedProjectState(next = null) {
     updateLinkedFlowInfo();
 }
 
+async function resolveLinkedFlowMeta(syncCode = "") {
+    const normalizedSyncCode = (syncCode || "").toString().trim();
+    if (!normalizedSyncCode) {
+        return { linked_flow_id: "", linked_flow_name: "" };
+    }
+
+    try {
+        const response = await fetch(`/api/process-flows?sync_code=${encodeURIComponent(normalizedSyncCode)}`);
+        if (!response.ok) {
+            return { linked_flow_id: "", linked_flow_name: "" };
+        }
+        const rows = await response.json();
+        const flow = Array.isArray(rows) ? rows[0] : null;
+        if (!flow) {
+            return { linked_flow_id: "", linked_flow_name: "" };
+        }
+        return {
+            linked_flow_id: flow?.id || "",
+            linked_flow_name: getFlowDisplayName(flow)
+        };
+    } catch (error) {
+        return { linked_flow_id: "", linked_flow_name: "" };
+    }
+}
+
+
 const unsavedChangesState = {
     dirty: false
 };
@@ -1712,14 +1738,19 @@ Si continúas, se sustituirá la vinculación actual y se asignará un nuevo SYN
                     }
 
                     applyProjectData(linkedPayload);
+                    const resolvedLinkedSyncCode = flow.sync_code || linkedProject.sync_code || "";
+                    const linkedFlowMeta = {
+                        linked_flow_id: flow?.id || "",
+                        linked_flow_name: getFlowDisplayName(flow)
+                    };
                     setLoadedProjectState({
                         id: linkedProject.id || null,
                         proyecto: linkedProject.proyecto || "",
                         subfuncion: linkedProject.subfuncion || "",
                         user: linkedProject.user || "",
-                        sync_code: flow.sync_code || linkedProject.sync_code || "",
-                        linked_flow_id: flow?.id || "",
-                        linked_flow_name: getFlowDisplayName(flow)
+                        sync_code: resolvedLinkedSyncCode,
+                        linked_flow_id: linkedFlowMeta.linked_flow_id,
+                        linked_flow_name: linkedFlowMeta.linked_flow_name
                     });
                     saveProjectState.activeSubfuncion = linkedProject.subfuncion || "";
                     markProjectAsSaved();
@@ -2052,14 +2083,16 @@ function ensureLoadProjectModal() {
                         throw new Error("Proyecto inválido.");
                     }
                     applyProjectData(payload);
+                    const resolvedSyncCode = project.sync_code || data?.sync_code || "";
+                    const linkedFlowMeta = await resolveLinkedFlowMeta(resolvedSyncCode);
                     setLoadedProjectState({
                         id: project.id || null,
                         proyecto: project.proyecto || "",
                         subfuncion: project.subfuncion || "",
                         user: project.user || "",
-                        sync_code: project.sync_code || data?.sync_code || "",
-                        linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
-                        linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+                        sync_code: resolvedSyncCode,
+                        linked_flow_id: linkedFlowMeta.linked_flow_id || "",
+                        linked_flow_name: linkedFlowMeta.linked_flow_name || ""
                     });
                     saveProjectState.activeSubfuncion = project.subfuncion || "";
                     setStatus("Proyecto cargado correctamente.", false);

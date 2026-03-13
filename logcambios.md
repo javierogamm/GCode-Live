@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.72 - 2026-03-13
+- Al cargar un proyecto desde el modal **Cargar proyecto**, ahora se resuelve automáticamente su flow vinculado usando `sync_code` y se muestra inmediatamente en el indicador superior **Flow vinculado**.
+- Esto evita que el indicador quede mostrando un vínculo anterior en memoria cuando el proyecto cargado ya tenía una vinculación distinta existente en base de datos.
+- Se actualizó la versión visible de la app a `v1.3.72` y la versión del proyecto en `package.json` a `1.3.72`.
+
 ## v1.3.71 - 2026-03-13
 - Al vincular un flow, la app ahora intenta cargar automáticamente el proyecto de Code que ya esté vinculado por `sync_code`; si existe, lo abre directamente con su contenido (si no existe, mantiene el comportamiento anterior de crear plantillas desde el flow).
 - Se añadió confirmación obligatoria al intentar vincular un flow distinto cuando el proyecto ya tenía vínculo previo; al confirmar, se sustituye el vínculo y se fuerza la asignación de un nuevo `sync_code`.
