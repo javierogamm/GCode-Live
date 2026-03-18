@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.79 - 2026-03-18
+- El botón rápido **💾** ahora confirma explícitamente **"Se ha guardado el proyecto"** cuando la sobrescritura rápida del proyecto finaliza correctamente.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.79` y la versión del proyecto en `package.json` a `1.3.79`.
+
 ## v1.3.78 - 2026-03-18
 - Se añadieron dos accesos rápidos en la barra superior: **💾** para sobrescribir directamente el proyecto cargado y **🔄** para recargarlo desde base de datos sin abrir modales.
 - La recarga rápida ahora pide confirmación si existen cambios sin guardar antes de restaurar la última versión consolidada del proyecto.
