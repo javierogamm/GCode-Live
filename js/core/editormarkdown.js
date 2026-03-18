@@ -189,9 +189,24 @@ const projectState = {
     activeTemplateId: null
 };
 
-const TEMPLATE_TYPES = ["Formulario", "Documento"];
+const TEMPLATE_TYPES = ["Formulario", "Documento", "Circuito de Resolución"];
 
-const normalizeTemplateType = (value) => TEMPLATE_TYPES.includes(value) ? value : "Documento";
+const normalizeTemplateType = (value) => {
+    const normalized = (value || "").toString().trim().toLowerCase();
+    if (normalized === "formulario") return "Formulario";
+    if (normalized === "documento") return "Documento";
+    if (normalized === "circuito de resolución" || normalized === "circuito de resolucion" || normalized === "cr") {
+        return "Circuito de Resolución";
+    }
+    return "Documento";
+};
+
+const mapFlowNodeTypeToTemplateType = (value) => {
+    const normalized = (value || "").toString().trim().toLowerCase();
+    if (normalized === "formulario") return "Formulario";
+    if (normalized === "cr") return "Circuito de Resolución";
+    return "Documento";
+};
 
 const composePlantillaResumen = () => projectState.templates
     .map((tpl) => {
@@ -471,6 +486,7 @@ function ensureTemplateManagerModal() {
                     <select id="templateManagerTypeSelect">
                         <option value="Formulario">Formulario</option>
                         <option value="Documento" selected>Documento</option>
+                        <option value="Circuito de Resolución">Circuito de Resolución</option>
                     </select>
                     <button type="button" data-action="create-template">Añadir plantilla</button>
                 </div>
@@ -1547,7 +1563,7 @@ function buildTemplatesFromFlow(flowData = {}) {
                 : (typeof node?.plantillaTexto === "string" ? node.plantillaTexto : "");
             const template = {
                 name: ensureUniqueName(nodeTitle, index),
-                type: nodeType === "formulario" ? "Formulario" : "Documento",
+                type: mapFlowNodeTypeToTemplateType(nodeType),
                 markdown
             };
             index += 1;
@@ -1655,7 +1671,7 @@ function appendMissingTemplatesFromFlow(flowPayload = {}) {
         const template = {
             id: createTemplateId(),
             name: finalName,
-            type: nodeType === "formulario" ? "Formulario" : "Documento",
+            type: mapFlowNodeTypeToTemplateType(nodeType),
             markdown: ""
         };
         projectState.templates.push(template);
