@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.77 - 2026-03-18
+- La vinculación con Flow ahora recupera también las plantillas de nodos de tipo circuito/circuito de resolución aunque el Markdown venga en variantes como `data.plantilla`, `data.plantillaTexto`, `plantilla` o en `fichaProyecto.plantillas`.
+- El envío de plantillas hacia Flow ahora replica el contenido también en `plantilla`, `plantillaTexto`, `data.plantilla` y `data.plantillaTexto` del nodo correspondiente para cubrir nodos de tipo circuito.
+- Se amplió la normalización de tipos de nodo remotos para tratar como `CR` las variantes `circuito`, `circuito de resolución` y `circuito de resolucion`.
+- Se actualizó la versión visible de la app a `v1.3.77` y la versión del proyecto en `package.json` a `1.3.77`.
+
 ## v1.3.76 - 2026-03-18
 - La app ahora admite el nuevo tipo de plantilla **`Circuito de Resolución`** en los selectores y flujos de creación/edición de plantillas del proyecto.
 - La vinculación con Flow consolida los nodos de tipo `CR` usando el tipo local **`Circuito de Resolución`** al traer plantillas al proyecto y al detectar nodos remotos pendientes.
