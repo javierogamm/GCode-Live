@@ -189,9 +189,61 @@ const projectState = {
     activeTemplateId: null
 };
 
-const TEMPLATE_TYPES = ["Formulario", "Documento"];
+const TEMPLATE_TYPES = ["Formulario", "Documento", "Circuito de Resolución"];
 
-const normalizeTemplateType = (value) => TEMPLATE_TYPES.includes(value) ? value : "Documento";
+const normalizeTemplateType = (value) => {
+    const normalized = (value || "").toString().trim().toLowerCase();
+    if (normalized === "formulario") return "Formulario";
+    if (normalized === "documento") return "Documento";
+    if (normalized === "circuito de resolución" || normalized === "circuito de resolucion" || normalized === "cr") {
+        return "Circuito de Resolución";
+    }
+    return "Documento";
+};
+
+const mapFlowNodeTypeToTemplateType = (value) => {
+    const normalized = (value || "").toString().trim().toLowerCase();
+    if (normalized === "formulario") return "Formulario";
+    if (normalized === "cr" || normalized === "circuito" || normalized === "circuito de resolución" || normalized === "circuito de resolucion") {
+        return "Circuito de Resolución";
+    }
+    return "Documento";
+};
+
+const normalizeFlowNodeType = (value) => {
+    const normalized = (value || "").toString().trim().toLowerCase();
+    if (normalized === "formulario") return "formulario";
+    if (normalized === "documento") return "documento";
+    if (normalized === "cr" || normalized === "circuito" || normalized === "circuito de resolución" || normalized === "circuito de resolucion") {
+        return "cr";
+    }
+    return normalized;
+};
+
+const extractNodeTemplateMarkdown = (node = {}, nodeTemplates = {}, fichaPlantillas = []) => {
+    const nodeId = (node?.id || "").toString();
+    const normalizedNodeName = (node?.titulo || node?.nombre || node?.name || nodeId || "").toString().trim().toLowerCase();
+    const fichaTemplate = Array.isArray(fichaPlantillas)
+        ? fichaPlantillas.find((item) => {
+            const nodoId = (item?.nodo_id || item?.nodoId || item?.node_id || "").toString().trim();
+            const itemName = (item?.nombre || item?.name || "").toString().trim().toLowerCase();
+            return (nodoId && nodoId === nodeId) || (normalizedNodeName && itemName === normalizedNodeName);
+        })
+        : null;
+
+    const candidates = [
+        nodeId ? nodeTemplates[nodeId] : "",
+        node?.plantillaTexto,
+        node?.plantilla,
+        node?.data?.plantilla,
+        node?.data?.plantillaTexto,
+        fichaTemplate?.markdown,
+        fichaTemplate?.plantilla,
+        fichaTemplate?.texto
+    ];
+
+    return candidates.find((value) => typeof value === "string") || "";
+};
 
 const composePlantillaResumen = () => projectState.templates
     .map((tpl) => {
@@ -471,6 +523,7 @@ function ensureTemplateManagerModal() {
                     <select id="templateManagerTypeSelect">
                         <option value="Formulario">Formulario</option>
                         <option value="Documento" selected>Documento</option>
+                        <option value="Circuito de Resolución">Circuito de Resolución</option>
                     </select>
                     <button type="button" data-action="create-template">Añadir plantilla</button>
                 </div>
@@ -1516,6 +1569,7 @@ function extractFlowPayload(flow = {}) {
 function buildTemplatesFromFlow(flowData = {}) {
     const nodes = Array.isArray(flowData?.nodos) ? flowData.nodos : [];
     const nodeTemplates = flowData?.plantillas && typeof flowData.plantillas === "object" ? flowData.plantillas : {};
+    const fichaPlantillas = Array.isArray(flowData?.fichaProyecto?.plantillas) ? flowData.fichaProyecto.plantillas : [];
     const allowedTypes = new Set(["formulario", "documento", "cr"]);
     const usedNames = new Set();
 
@@ -1537,17 +1591,15 @@ function buildTemplatesFromFlow(flowData = {}) {
 
     let index = 1;
     return nodes
-        .filter((node) => allowedTypes.has(String(node?.tipo || "").toLowerCase()))
+        .filter((node) => allowedTypes.has(normalizeFlowNodeType(node?.tipo || "")))
         .map((node) => {
             const nodeId = node?.id || "";
-            const nodeType = String(node?.tipo || "Documento").toLowerCase();
+            const nodeType = normalizeFlowNodeType(node?.tipo || "Documento");
             const nodeTitle = node?.titulo || nodeId || `Plantilla ${index}`;
-            const markdown = typeof nodeTemplates[nodeId] === "string"
-                ? nodeTemplates[nodeId]
-                : (typeof node?.plantillaTexto === "string" ? node.plantillaTexto : "");
+            const markdown = extractNodeTemplateMarkdown(node, nodeTemplates, fichaPlantillas);
             const template = {
                 name: ensureUniqueName(nodeTitle, index),
-                type: nodeType === "formulario" ? "Formulario" : "Documento",
+                type: mapFlowNodeTypeToTemplateType(nodeType),
                 markdown
             };
             index += 1;
@@ -1614,8 +1666,10 @@ function mergeTemplatesIntoFlowPayload(flowPayload = {}, templates = []) {
         if (node?.id) {
             nextPayload.plantillas[node.id] = markdown;
             node.plantillaTexto = markdown;
+            node.plantilla = markdown;
             if (node.data && typeof node.data === "object") {
                 node.data.plantilla = markdown;
+                node.data.plantillaTexto = markdown;
             }
             upsertFichaPlantilla(template, node.id);
             return;
@@ -1641,7 +1695,7 @@ function appendMissingTemplatesFromFlow(flowPayload = {}) {
     const addedTemplates = [];
     let index = 1;
     nodes.forEach((node) => {
-        const nodeType = String(node?.tipo || "").toLowerCase();
+        const nodeType = normalizeFlowNodeType(node?.tipo || "");
         if (!allowedTypes.has(nodeType)) return;
 
         const rawName = (node?.titulo || node?.nombre || node?.name || node?.id || `Plantilla ${index}`).toString().trim();
@@ -1655,7 +1709,7 @@ function appendMissingTemplatesFromFlow(flowPayload = {}) {
         const template = {
             id: createTemplateId(),
             name: finalName,
-            type: nodeType === "formulario" ? "Formulario" : "Documento",
+            type: mapFlowNodeTypeToTemplateType(nodeType),
             markdown: ""
         };
         projectState.templates.push(template);
