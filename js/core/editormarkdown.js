@@ -988,13 +988,13 @@ function ensureSaveProjectModal() {
                     payload = null;
                 }
                 if (response.status === 409 && payload?.code === "PROJECT_EXISTS") {
-                    setStatus(`Ya existe un registro para "${proyectoNombre}". Si eres el creador, usa "Sobrescribir".`);
-                    await loadProjects(subfuncionNombre);
-                    return;
-                }
-                if (response.status === 403 && payload?.code === "OWNER_REQUIRED") {
-                    const owner = payload?.owner || "otro usuario";
-                    setStatus(`Solo ${owner} puede sobrescribir este registro.`);
+                    const confirmation = window.confirm(`Ya existe un proyecto llamado "${proyectoNombre}".\n\nAceptar: sobrescribir el registro actual\nCancelar: guardar como copia`);
+                    if (confirmation) {
+                        await saveProject(true);
+                        return;
+                    }
+                    prepareCopyName();
+                    await saveProject(false);
                     return;
                 }
                 throw new Error("Error al guardar el proyecto.");
@@ -1010,7 +1010,7 @@ function ensureSaveProjectModal() {
                 id: savedData?.id || saveProjectState.loadedProject?.id || null,
                 proyecto: proyectoNombre,
                 subfuncion: subfuncionNombre,
-                user: currentUser,
+                user: savedData?.user || currentUser,
                 sync_code: savedData?.sync_code || saveProjectState.loadedProject?.sync_code || "",
                 linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
                 linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
@@ -1197,9 +1197,6 @@ function ensureProjectHistoryModal() {
                 } catch (error) {
                     errorPayload = null;
                 }
-                if (response.status === 403 && errorPayload?.code === "OWNER_REQUIRED") {
-                    throw new Error("Solo el creador puede restaurar versiones de este proyecto.");
-                }
                 throw new Error("No se pudo consolidar la restauración.");
             }
 
@@ -1215,7 +1212,7 @@ function ensureProjectHistoryModal() {
                 id: savedData?.id || project.id || null,
                 proyecto: proyectoNombre,
                 subfuncion: project.subfuncion || "",
-                user: currentUser,
+                user: savedData?.user || currentUser,
                 sync_code: savedData?.sync_code || project.sync_code || "",
                 linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
                 linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
@@ -1283,7 +1280,16 @@ function ensureProjectHistoryModal() {
             title.textContent = `Versión #${version.id}`;
             const details = document.createElement("div");
             details.className = "load-project-details";
-            details.textContent = `Guardado: ${formatDate(version.fecha_guardado || version.created_at)} · Autor: ${version.user || "Sin autor"}`;
+            let historyUser = version.user || "";
+            if (!historyUser) {
+                try {
+                    const versionPayload = typeof version?.json === "string" ? JSON.parse(version.json) : version?.json;
+                    historyUser = versionPayload?._historial?.usuarioCambio || "";
+                } catch (error) {
+                    historyUser = "";
+                }
+            }
+            details.textContent = `Guardado: ${formatDate(version.fecha_guardado || version.created_at)} · Autor: ${historyUser || "Sin autor"}`;
             meta.appendChild(title);
             meta.appendChild(details);
 
@@ -1999,15 +2005,15 @@ function ensureLoadProjectModal() {
             });
             actions.appendChild(loadBtn);
 
+            const historyBtn = document.createElement("button");
+            historyBtn.type = "button";
+            historyBtn.className = "load-project-action load-project-action-history";
+            historyBtn.textContent = "Historial";
+            historyBtn.addEventListener("click", () => openProjectHistoryModal(project));
+            actions.appendChild(historyBtn);
+
             const isOwner = currentUser && project.user && currentUser === project.user;
             if (isOwner) {
-                const historyBtn = document.createElement("button");
-                historyBtn.type = "button";
-                historyBtn.className = "load-project-action load-project-action-history";
-                historyBtn.textContent = "Historial";
-                historyBtn.addEventListener("click", () => openProjectHistoryModal(project));
-                actions.appendChild(historyBtn);
-
                 const deleteBtn = document.createElement("button");
                 deleteBtn.type = "button";
                 deleteBtn.className = "load-project-action load-project-action-delete";

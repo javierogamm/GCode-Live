@@ -1,17 +1,29 @@
 const { supabaseFetch } = require("./_supabase");
 
-async function createBackupFromPayload(payload, sourceId) {
+async function createBackupFromPayload(payload, sourceId, changedBy = "") {
   if (!payload || !sourceId) {
     return;
   }
 
+  const normalizedChangedBy = typeof changedBy === "string" ? changedBy.trim() : "";
+  const payloadJson = payload.json && typeof payload.json === "object"
+    ? payload.json
+    : {};
+  const backupJson = {
+    ...payloadJson,
+    _historial: {
+      ...(payloadJson._historial && typeof payloadJson._historial === "object" ? payloadJson._historial : {}),
+      usuarioCambio: normalizedChangedBy || payload.user || ""
+    }
+  };
+
   const backupBody = {
     proyecto: payload.proyecto,
     plantilla: payload.plantilla,
-    user: payload.user,
+    user: normalizedChangedBy || payload.user,
     subfuncion: payload.subfuncion,
     sync_code: payload.sync_code || null,
-    json: payload.json,
+    json: backupJson,
     fecha_guardado: new Date().toISOString(),
     ID_Origen: String(sourceId)
   };
@@ -109,10 +121,7 @@ module.exports = async (req, res) => {
           res.status(409).json({ error: "Project already exists", code: "PROJECT_EXISTS", owner: existingAuthor });
           return;
         }
-        if (!normalizedUser || normalizedUser !== existingAuthor) {
-          res.status(403).json({ error: "Only owner can overwrite", code: "OWNER_REQUIRED", owner: existingAuthor });
-          return;
-        }
+        payload.user = existingAuthor || normalizedUser;
         sourceId = lookupData[0].id;
         response = await supabaseFetch("Code_Markdowns", {
           method: "PATCH",
@@ -138,7 +147,7 @@ module.exports = async (req, res) => {
       const recordId = sourceId || savedRecord?.id;
 
       try {
-        await createBackupFromPayload(payload, recordId);
+        await createBackupFromPayload(payload, recordId, normalizedUser);
       } catch (backupError) {
         console.error("Backup error:", backupError);
       }
