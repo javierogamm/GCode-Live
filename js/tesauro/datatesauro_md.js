@@ -83,13 +83,20 @@ const DataTesauro = {
         if (typeof window.ensureTemplateButtons === "function") {
             window.ensureTemplateButtons();
         }
+        if (typeof window.ensureQuickProjectButtons === "function") {
+            window.ensureQuickProjectButtons();
+        }
         // === NUEVO BOTÓN FLOTANTE: acceso directo al gestor completo ===
         if (!document.getElementById("btnTesauroManagerFloating")) {
             const btn2 = document.createElement("button");
             btn2.id = "btnTesauroManagerFloating";
-            btn2.className = "floating-tesauro-manager-btn";
+            btn2.className = "floating-action-btn floating-tesauro-manager-btn";
             btn2.textContent = "🧩Gestor de Tesauros";
-            document.body.appendChild(btn2);
+            if (floatingRow) {
+                floatingRow.appendChild(btn2);
+            } else {
+                document.body.appendChild(btn2);
+            }
 
             btn2.addEventListener("click", () => {
                 if (window.TesauroManager && typeof TesauroManager.open === "function") {

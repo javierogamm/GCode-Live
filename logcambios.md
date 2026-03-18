@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.78 - 2026-03-18
+- Se añadieron dos accesos rápidos en la barra superior: **💾** para sobrescribir directamente el proyecto cargado y **🔄** para recargarlo desde base de datos sin abrir modales.
+- La recarga rápida ahora pide confirmación si existen cambios sin guardar antes de restaurar la última versión consolidada del proyecto.
+- El gestor de tesauros se integró en la misma fila superior de acciones rápidas para que los nuevos iconos queden a su izquierda dentro de la cabecera del editor.
+- Se centralizó la persistencia/carga del proyecto en helpers reutilizables para que el guardado rápido, la recarga y el flujo existente de modales compartan la misma consolidación.
+- Se actualizó la versión visible de la app a `v1.3.78` y la versión del proyecto en `package.json` a `1.3.78`.
+
 ## v1.3.77 - 2026-03-18
 - La vinculación con Flow ahora recupera también las plantillas de nodos de tipo circuito/circuito de resolución aunque el Markdown venga en variantes como `data.plantilla`, `data.plantillaTexto`, `plantilla` o en `fichaProyecto.plantillas`.
 - El envío de plantillas hacia Flow ahora replica el contenido también en `plantilla`, `plantillaTexto`, `data.plantilla` y `data.plantillaTexto` del nodo correspondiente para cubrir nodos de tipo circuito.
