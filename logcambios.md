@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.75 - 2026-03-18
+- Los nodos de tipo `CR` ahora se incluyen junto con los nodos de tipo formulario/documento al vincular flows y al detectar nodos remotos pendientes, por lo que también se crean como plantillas locales del proyecto.
+- La mensajería del flujo de vinculación se actualizó para reflejar que la app ya trae plantillas desde nodos formulario/documento/CR.
+- Se actualizó la versión visible de la app a `v1.3.75` y la versión del proyecto en `package.json` a `1.3.75`.
+
 ## v1.3.74 - 2026-03-18
 - Al cargar/importar/restaurar proyectos ahora se revisa la vinculación guardada con Flow usando `sync_code` y/o `linked_flow_id` para reconstruir el enlace aunque el JSON no traiga todos los metadatos del flow.
 - La reconstrucción de la vinculación solo actualiza la referencia al flow (`sync_code`, `linked_flow_id`, `linked_flow_name`) y **no** vuelve a hidratar ni sobrescribir las plantillas locales del proyecto desde Process.

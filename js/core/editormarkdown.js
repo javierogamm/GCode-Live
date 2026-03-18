@@ -1516,7 +1516,7 @@ function extractFlowPayload(flow = {}) {
 function buildTemplatesFromFlow(flowData = {}) {
     const nodes = Array.isArray(flowData?.nodos) ? flowData.nodos : [];
     const nodeTemplates = flowData?.plantillas && typeof flowData.plantillas === "object" ? flowData.plantillas : {};
-    const allowedTypes = new Set(["formulario", "documento"]);
+    const allowedTypes = new Set(["formulario", "documento", "cr"]);
     const usedNames = new Set();
 
     const ensureUniqueName = (name, index) => {
@@ -1631,7 +1631,7 @@ function mergeTemplatesIntoFlowPayload(flowPayload = {}, templates = []) {
 
 function appendMissingTemplatesFromFlow(flowPayload = {}) {
     const nodes = Array.isArray(flowPayload?.nodos) ? flowPayload.nodos : [];
-    const allowedTypes = new Set(["formulario", "documento"]);
+    const allowedTypes = new Set(["formulario", "documento", "cr"]);
     const existingNames = new Set(
         (projectState.templates || [])
             .map((tpl) => (tpl?.name || "").trim().toLowerCase())
@@ -1682,7 +1682,7 @@ function ensureProcessLinkModal() {
             <div class="modal-header">
                 <div>
                     <h3>Vincular proyecto process</h3>
-                    <p class="muted">Crea plantillas desde nodos formulario/documento del flow seleccionado.</p>
+                    <p class="muted">Crea plantillas desde nodos formulario/documento/CR del flow seleccionado.</p>
                 </div>
                 <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
             </div>
@@ -1750,7 +1750,7 @@ function ensureProcessLinkModal() {
 
         const templates = buildTemplatesFromFlow(payload);
         if (!templates.length) {
-            setStatus("No hay nodos formulario/documento con plantilla disponible.");
+            setStatus("No hay nodos formulario/documento/CR con plantilla disponible.");
             return;
         }
 
