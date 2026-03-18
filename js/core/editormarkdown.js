@@ -661,6 +661,55 @@ function ensureTemplateButtons() {
 
 window.ensureTemplateButtons = ensureTemplateButtons;
 
+function ensureQuickProjectButtons() {
+    const row = ensureFloatingActionRow();
+    if (!row) return;
+
+    if (!document.getElementById("btnQuickSaveProject")) {
+        const saveBtn = document.createElement("button");
+        saveBtn.id = "btnQuickSaveProject";
+        saveBtn.type = "button";
+        saveBtn.className = "floating-action-btn quick-project-action-btn";
+        saveBtn.title = "Guardar proyecto";
+        saveBtn.setAttribute("aria-label", "Guardar proyecto");
+        saveBtn.textContent = "💾";
+        saveBtn.addEventListener("click", async () => {
+            try {
+                await quickOverwriteCurrentProject();
+            } catch (error) {
+                console.error(error);
+                alert(error?.message || "No se pudo guardar el proyecto.");
+            }
+        });
+        row.appendChild(saveBtn);
+    }
+
+    if (!document.getElementById("btnQuickReloadProject")) {
+        const reloadBtn = document.createElement("button");
+        reloadBtn.id = "btnQuickReloadProject";
+        reloadBtn.type = "button";
+        reloadBtn.className = "floating-action-btn quick-project-action-btn";
+        reloadBtn.title = "Recargar proyecto";
+        reloadBtn.setAttribute("aria-label", "Recargar proyecto");
+        reloadBtn.textContent = "🔄";
+        reloadBtn.addEventListener("click", async () => {
+            if (unsavedChangesState.dirty) {
+                const confirmation = window.confirm("Hay cambios sin guardar. ¿Quieres recargar el proyecto igualmente?");
+                if (!confirmation) return;
+            }
+            try {
+                await reloadCurrentProjectFromDatabase();
+            } catch (error) {
+                console.error(error);
+                alert(error?.message || "No se pudo recargar el proyecto.");
+            }
+        });
+        row.appendChild(reloadBtn);
+    }
+}
+
+window.ensureQuickProjectButtons = ensureQuickProjectButtons;
+
 if (projectNameInput) {
     projectNameInput.addEventListener("input", (event) => {
         const value = event.target ? event.target.value : "";
@@ -788,6 +837,135 @@ window.addEventListener("beforeunload", (event) => {
     event.preventDefault();
     event.returnValue = "";
 });
+
+function getLoadedProjectContext() {
+    return {
+        id: saveProjectState.loadedProject?.id || null,
+        proyecto: saveProjectState.loadedProject?.proyecto || projectState.name || "",
+        subfuncion: saveProjectState.activeSubfuncion || saveProjectState.loadedProject?.subfuncion || "",
+        user: saveProjectState.loadedProject?.user || "",
+        sync_code: saveProjectState.loadedProject?.sync_code || "",
+        linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
+        linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+    };
+}
+
+async function persistProjectToDatabase({ overwrite = false, projectName = "", subfuncion = "" } = {}) {
+    const proyectoNombre = (projectName || "").trim();
+    const subfuncionNombre = (subfuncion || "").trim();
+    const currentUser = getCurrentAuthUserName();
+
+    if (!proyectoNombre) {
+        throw new Error("Indica el nombre del proyecto.");
+    }
+    if (!subfuncionNombre) {
+        throw new Error("Indica la carpeta (subfunción).");
+    }
+    if (!currentUser) {
+        throw new Error("Debes iniciar sesión para guardar.");
+    }
+
+    syncActiveTemplateMarkdown();
+    setProjectName(proyectoNombre);
+    projectState.name = proyectoNombre;
+    const procedimiento = buildProjectPayload();
+    const plantillaResumen = composePlantillaResumen();
+
+    const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            proyecto: proyectoNombre,
+            plantilla: plantillaResumen,
+            user: currentUser,
+            subfuncion: subfuncionNombre,
+            json: procedimiento,
+            overwrite
+        })
+    });
+
+    let payload = null;
+    try {
+        payload = await response.json();
+    } catch (error) {
+        payload = null;
+    }
+
+    if (!response.ok) {
+        const err = new Error(payload?.error || payload?.message || "Error al guardar el proyecto.");
+        err.status = response.status;
+        err.payload = payload;
+        throw err;
+    }
+
+    saveProjectState.activeSubfuncion = subfuncionNombre;
+    setLoadedProjectState({
+        id: payload?.id || saveProjectState.loadedProject?.id || null,
+        proyecto: proyectoNombre,
+        subfuncion: subfuncionNombre,
+        user: payload?.user || currentUser,
+        sync_code: payload?.sync_code || saveProjectState.loadedProject?.sync_code || "",
+        linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
+        linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+    });
+    markProjectAsSaved();
+
+    return payload;
+}
+
+async function quickOverwriteCurrentProject() {
+    const context = getLoadedProjectContext();
+    if (!context.id || !context.proyecto || !context.subfuncion) {
+        throw new Error("Primero carga o guarda el proyecto con el flujo normal antes de usar el guardado rápido.");
+    }
+    await persistProjectToDatabase({
+        overwrite: true,
+        projectName: context.proyecto,
+        subfuncion: context.subfuncion
+    });
+    return context;
+}
+
+async function reloadCurrentProjectFromDatabase() {
+    const context = getLoadedProjectContext();
+    if (!context.id) {
+        throw new Error("No hay un proyecto cargado para recargar.");
+    }
+
+    const response = await fetch(`/api/project?id=${encodeURIComponent(context.id)}`);
+    if (!response.ok) {
+        throw new Error("Error al recargar el proyecto.");
+    }
+
+    const data = await response.json();
+    let payload = data?.json;
+    if (typeof payload === "string") {
+        payload = JSON.parse(payload);
+    }
+    if (!payload || typeof payload !== "object") {
+        throw new Error("Proyecto inválido.");
+    }
+
+    const linkInfo = await resolveLinkedFlowInfo({
+        ...applyProjectData(payload),
+        sync_code: data?.sync_code || context.sync_code || extractProjectLinkInfo(payload).sync_code || ""
+    });
+
+    setLoadedProjectState({
+        id: context.id,
+        proyecto: data?.proyecto || context.proyecto || "",
+        subfuncion: data?.subfuncion || context.subfuncion || "",
+        user: data?.user || context.user || "",
+        sync_code: linkInfo.sync_code || "",
+        linked_flow_id: linkInfo.linked_flow_id || "",
+        linked_flow_name: linkInfo.linked_flow_name || ""
+    });
+    saveProjectState.activeSubfuncion = data?.subfuncion || context.subfuncion || "";
+    markProjectAsSaved();
+    return data;
+}
 
 function ensureSaveProjectModal() {
     if (saveProjectState.modal) return saveProjectState.modal;
@@ -1070,79 +1248,15 @@ function ensureSaveProjectModal() {
     const saveProject = async (overwrite = false) => {
         const proyectoNombre = projectInput ? projectInput.value.trim() : "";
         const subfuncionNombre = subfuncionInput ? subfuncionInput.value.trim() : "";
-        const currentUser = getCurrentAuthUserName();
-
-        if (!proyectoNombre) {
-            setStatus("Indica el nombre del proyecto.");
-            return;
-        }
-        if (!subfuncionNombre) {
-            setStatus("Indica la carpeta (subfunción).");
-            return;
-        }
-        if (!currentUser) {
-            setStatus("Debes iniciar sesión para guardar.");
-            return;
-        }
-
-        setProjectName(proyectoNombre);
-        projectState.name = proyectoNombre;
-        const procedimiento = buildProjectPayload();
 
         try {
-            const plantillaResumen = composePlantillaResumen();
             setStatus(overwrite ? "Sobrescribiendo proyecto..." : "Guardando proyecto...", false);
-            const response = await fetch("/api/projects", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    proyecto: proyectoNombre,
-                    plantilla: plantillaResumen,
-                    user: currentUser,
-                    subfuncion: subfuncionNombre,
-                    json: procedimiento,
-                    overwrite
-                })
-            });
-            if (!response.ok) {
-                let payload = null;
-                try {
-                    payload = await response.json();
-                } catch (error) {
-                    payload = null;
-                }
-                if (response.status === 409 && payload?.code === "PROJECT_EXISTS") {
-                    const confirmation = window.confirm(`Ya existe un proyecto llamado "${proyectoNombre}".\n\nAceptar: sobrescribir el registro actual\nCancelar: guardar como copia`);
-                    if (confirmation) {
-                        await saveProject(true);
-                        return;
-                    }
-                    prepareCopyName();
-                    await saveProject(false);
-                    return;
-                }
-                throw new Error("Error al guardar el proyecto.");
-            }
-            let savedData = null;
-            try {
-                savedData = await response.json();
-            } catch (error) {
-                savedData = null;
-            }
-            saveProjectState.activeSubfuncion = subfuncionNombre;
-            setLoadedProjectState({
-                id: savedData?.id || saveProjectState.loadedProject?.id || null,
-                proyecto: proyectoNombre,
-                subfuncion: subfuncionNombre,
-                user: savedData?.user || currentUser,
-                sync_code: savedData?.sync_code || saveProjectState.loadedProject?.sync_code || "",
-                linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
-                linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+            await persistProjectToDatabase({
+                overwrite,
+                projectName: proyectoNombre,
+                subfuncion: subfuncionNombre
             });
             setStatus(overwrite ? "Proyecto sobrescrito correctamente." : "Proyecto guardado correctamente.", false);
-            markProjectAsSaved();
             renderLocalTemplates();
             await loadSubfunciones();
             await loadProjects(subfuncionNombre);
@@ -1150,8 +1264,21 @@ function ensureSaveProjectModal() {
                 modal.style.display = "none";
             }
         } catch (error) {
+            if (error?.status === 409 && error?.payload?.code === "PROJECT_EXISTS") {
+                const confirmation = window.confirm(`Ya existe un proyecto llamado "${proyectoNombre}".
+
+Aceptar: sobrescribir el registro actual
+Cancelar: guardar como copia`);
+                if (confirmation) {
+                    await saveProject(true);
+                    return;
+                }
+                prepareCopyName();
+                await saveProject(false);
+                return;
+            }
             console.error(error);
-            setStatus(overwrite ? "No se pudo sobrescribir el proyecto." : "No se pudo guardar el proyecto.");
+            setStatus(error?.message || (overwrite ? "No se pudo sobrescribir el proyecto." : "No se pudo guardar el proyecto."));
         }
     };
 
@@ -2105,38 +2232,21 @@ function ensureLoadProjectModal() {
             loadBtn.addEventListener("click", async () => {
                 try {
                     setStatus("Cargando proyecto...", false);
-                    const response = await fetch(`/api/project?id=${encodeURIComponent(project.id)}`);
-                    if (!response.ok) {
-                        throw new Error("Error al cargar el proyecto.");
-                    }
-                    const data = await response.json();
-                    let payload = data?.json;
-                    if (typeof payload === "string") {
-                        payload = JSON.parse(payload);
-                    }
-                    if (!payload || typeof payload !== "object") {
-                        throw new Error("Proyecto inválido.");
-                    }
-                    const linkInfo = await resolveLinkedFlowInfo({
-                        ...applyProjectData(payload),
-                        sync_code: project.sync_code || data?.sync_code || extractProjectLinkInfo(payload).sync_code || ""
-                    });
                     setLoadedProjectState({
                         id: project.id || null,
                         proyecto: project.proyecto || "",
                         subfuncion: project.subfuncion || "",
                         user: project.user || "",
-                        sync_code: linkInfo.sync_code || "",
-                        linked_flow_id: linkInfo.linked_flow_id || "",
-                        linked_flow_name: linkInfo.linked_flow_name || ""
+                        sync_code: project.sync_code || "",
+                        linked_flow_id: project.linked_flow_id || "",
+                        linked_flow_name: project.linked_flow_name || ""
                     });
-                    saveProjectState.activeSubfuncion = project.subfuncion || "";
+                    await reloadCurrentProjectFromDatabase();
                     setStatus("Proyecto cargado correctamente.", false);
-                    markProjectAsSaved();
                     modal.style.display = "none";
                 } catch (error) {
                     console.error(error);
-                    setStatus("No se pudo cargar el proyecto.");
+                    setStatus(error?.message || "No se pudo cargar el proyecto.");
                 }
             });
             actions.appendChild(loadBtn);
