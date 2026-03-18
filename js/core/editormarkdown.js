@@ -1280,7 +1280,16 @@ function ensureProjectHistoryModal() {
             title.textContent = `Versión #${version.id}`;
             const details = document.createElement("div");
             details.className = "load-project-details";
-            details.textContent = `Guardado: ${formatDate(version.fecha_guardado || version.created_at)} · Autor: ${version.user || "Sin autor"}`;
+            let historyUser = version.user || "";
+            if (!historyUser) {
+                try {
+                    const versionPayload = typeof version?.json === "string" ? JSON.parse(version.json) : version?.json;
+                    historyUser = versionPayload?._historial?.usuarioCambio || "";
+                } catch (error) {
+                    historyUser = "";
+                }
+            }
+            details.textContent = `Guardado: ${formatDate(version.fecha_guardado || version.created_at)} · Autor: ${historyUser || "Sin autor"}`;
             meta.appendChild(title);
             meta.appendChild(details);
 
@@ -1996,15 +2005,15 @@ function ensureLoadProjectModal() {
             });
             actions.appendChild(loadBtn);
 
+            const historyBtn = document.createElement("button");
+            historyBtn.type = "button";
+            historyBtn.className = "load-project-action load-project-action-history";
+            historyBtn.textContent = "Historial";
+            historyBtn.addEventListener("click", () => openProjectHistoryModal(project));
+            actions.appendChild(historyBtn);
+
             const isOwner = currentUser && project.user && currentUser === project.user;
             if (isOwner) {
-                const historyBtn = document.createElement("button");
-                historyBtn.type = "button";
-                historyBtn.className = "load-project-action load-project-action-history";
-                historyBtn.textContent = "Historial";
-                historyBtn.addEventListener("click", () => openProjectHistoryModal(project));
-                actions.appendChild(historyBtn);
-
                 const deleteBtn = document.createElement("button");
                 deleteBtn.type = "button";
                 deleteBtn.className = "load-project-action load-project-action-delete";

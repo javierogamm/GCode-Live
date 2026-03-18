@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.72 - 2026-03-18
+- En el modal de **Cargar proyecto**, el botón **Historial** ahora está disponible para cualquier usuario autenticado, no solo para el creador del registro.
+- El historial de guardados mantiene y muestra todas las versiones consolidadas del proyecto indicando el usuario que realizó cada guardado/sobrescritura.
+- Se consolidó la trazabilidad de versiones apoyándose en los datos de backup (`user` y `_historial.usuarioCambio`) para identificar autoría de cada iteración guardada.
+- Se actualizó la versión visible de la app a `v1.3.72` y la versión del proyecto en `package.json` a `1.3.72`.
+
 ## v1.3.71 - 2026-03-17
 - Se habilitó la sobrescritura en BDD de proyectos existentes por usuarios distintos al configurador/creador original.
 - La consolidación mantiene el propietario original del proyecto en `Code_Markdowns`, pero registra en histórico el usuario que ejecuta el cambio.
