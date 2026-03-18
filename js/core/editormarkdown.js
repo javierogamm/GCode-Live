@@ -676,6 +676,7 @@ function ensureQuickProjectButtons() {
         saveBtn.addEventListener("click", async () => {
             try {
                 await quickOverwriteCurrentProject();
+                alert("Se ha guardado el proyecto");
             } catch (error) {
                 console.error(error);
                 alert(error?.message || "No se pudo guardar el proyecto.");
