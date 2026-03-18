@@ -335,7 +335,56 @@ function extractProjectLinkInfo(data = {}) {
     };
 }
 
+async function resolveLinkedFlowInfo(baseInfo = {}) {
+    const currentInfo = baseInfo && typeof baseInfo === "object" ? { ...baseInfo } : {};
+    const syncCode = (currentInfo.sync_code || "").toString().trim();
+    const linkedFlowId = (currentInfo.linked_flow_id || "").toString().trim();
+
+    if (linkedFlowId && currentInfo.linked_flow_name) {
+        return currentInfo;
+    }
+    if (!linkedFlowId && !syncCode) {
+        return currentInfo;
+    }
+
+    const query = linkedFlowId
+        ? `id=${encodeURIComponent(linkedFlowId)}`
+        : `sync_code=${encodeURIComponent(syncCode)}`;
+
+    try {
+        registerSyncLog({
+            level: "info",
+            stage: "resolve_linked_flow",
+            detail: `Resolviendo vínculo guardado sync_code=${syncCode || "-"} flow_id=${linkedFlowId || "-"}`
+        });
+        const response = await fetch(`/api/process-flows?${query}`);
+        if (!response.ok) {
+            throw new Error("No se pudo revisar la vinculación con Flow");
+        }
+        const rows = await response.json();
+        const flow = Array.isArray(rows) ? rows[0] : null;
+        if (!flow) {
+            return currentInfo;
+        }
+        return {
+            ...currentInfo,
+            sync_code: syncCode || flow?.sync_code || "",
+            linked_flow_id: linkedFlowId || flow?.id || "",
+            linked_flow_name: currentInfo.linked_flow_name || getFlowDisplayName(flow)
+        };
+    } catch (error) {
+        console.warn("No se pudo resolver la vinculación guardada del flow", error);
+        registerSyncLog({
+            level: "error",
+            stage: "resolve_linked_flow",
+            detail: error?.message || "Error revisando la vinculación guardada"
+        });
+        return currentInfo;
+    }
+}
+
 function buildProjectPayload() {
+
     const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
         ? DataTesauro.campos
         : [];
@@ -620,14 +669,15 @@ if (btnImportProyecto) {
             if (!file) return;
 
             const reader = new FileReader();
-            reader.onload = () => {
+            reader.onload = async () => {
                 try {
                     const raw = reader.result || "";
                     const data = JSON.parse(raw);
 
                     // 1) Restaurar markdown
                     const linkInfo = applyProjectData(data);
-                    setLoadedProjectState(linkInfo.sync_code || linkInfo.linked_flow_id || linkInfo.linked_flow_name ? linkInfo : null);
+                    const resolvedLinkInfo = await resolveLinkedFlowInfo(linkInfo);
+                    setLoadedProjectState(resolvedLinkInfo.sync_code || resolvedLinkInfo.linked_flow_id || resolvedLinkInfo.linked_flow_name ? resolvedLinkInfo : null);
                     markProjectAsDirty();
 
                     alert("✔ Proyecto importado correctamente.");
@@ -1230,13 +1280,16 @@ function ensureProjectHistoryModal() {
                 savedData = null;
             }
 
-            const linkInfo = applyProjectData(payload);
+            const linkInfo = await resolveLinkedFlowInfo({
+                ...applyProjectData(payload),
+                sync_code: savedData?.sync_code || project.sync_code || extractProjectLinkInfo(payload).sync_code || ""
+            });
             setLoadedProjectState({
                 id: savedData?.id || project.id || null,
                 proyecto: proyectoNombre,
                 subfuncion: project.subfuncion || "",
                 user: savedData?.user || currentUser,
-                sync_code: savedData?.sync_code || project.sync_code || linkInfo.sync_code || "",
+                sync_code: linkInfo.sync_code || "",
                 linked_flow_id: linkInfo.linked_flow_id || "",
                 linked_flow_name: linkInfo.linked_flow_name || ""
             });
@@ -1262,13 +1315,16 @@ function ensureProjectHistoryModal() {
         try {
             const payload = typeof version?.json === "string" ? JSON.parse(version.json) : version?.json;
             if (!payload || typeof payload !== "object") throw new Error("Versión inválida");
-            const linkInfo = applyProjectData(payload);
+            const linkInfo = await resolveLinkedFlowInfo({
+                ...applyProjectData(payload),
+                sync_code: historyProjectState.currentProject?.sync_code || extractProjectLinkInfo(payload).sync_code || ""
+            });
             setLoadedProjectState({
                 id: historyProjectState.currentProject?.id || null,
                 proyecto: historyProjectState.currentProject?.proyecto || "",
                 subfuncion: historyProjectState.currentProject?.subfuncion || "",
                 user: historyProjectState.currentProject?.user || "",
-                sync_code: historyProjectState.currentProject?.sync_code || linkInfo.sync_code || "",
+                sync_code: linkInfo.sync_code || "",
                 linked_flow_id: linkInfo.linked_flow_id || "",
                 linked_flow_name: linkInfo.linked_flow_name || ""
             });
@@ -2007,13 +2063,16 @@ function ensureLoadProjectModal() {
                     if (!payload || typeof payload !== "object") {
                         throw new Error("Proyecto inválido.");
                     }
-                    const linkInfo = applyProjectData(payload);
+                    const linkInfo = await resolveLinkedFlowInfo({
+                        ...applyProjectData(payload),
+                        sync_code: project.sync_code || data?.sync_code || extractProjectLinkInfo(payload).sync_code || ""
+                    });
                     setLoadedProjectState({
                         id: project.id || null,
                         proyecto: project.proyecto || "",
                         subfuncion: project.subfuncion || "",
                         user: project.user || "",
-                        sync_code: project.sync_code || data?.sync_code || linkInfo.sync_code || "",
+                        sync_code: linkInfo.sync_code || "",
                         linked_flow_id: linkInfo.linked_flow_id || "",
                         linked_flow_name: linkInfo.linked_flow_name || ""
                     });

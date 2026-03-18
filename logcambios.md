@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.74 - 2026-03-18
+- Al cargar/importar/restaurar proyectos ahora se revisa la vinculación guardada con Flow usando `sync_code` y/o `linked_flow_id` para reconstruir el enlace aunque el JSON no traiga todos los metadatos del flow.
+- La reconstrucción de la vinculación solo actualiza la referencia al flow (`sync_code`, `linked_flow_id`, `linked_flow_name`) y **no** vuelve a hidratar ni sobrescribir las plantillas locales del proyecto desde Process.
+- Se añadió trazabilidad en `gcSyncLog` para los intentos de resolución del vínculo guardado durante carga/importación/restauración.
+- Se actualizó la versión visible de la app a `v1.3.74` y la versión del proyecto en `package.json` a `1.3.74`.
+
 ## v1.3.73 - 2026-03-18
 - Se sustituyó el botón lateral **"Sincronizar Code"** por **"Enviar plantillas a Flow"**, dejando explícito que la acción solo envía las plantillas locales y sobrescribe las existentes en Flow.
 - La acción de envío ya no crea plantillas vacías nuevas en Code al consultar el flow vinculado; ahora conserva el criterio operativo definido: tras la primera vinculación, el sentido de trabajo es siempre desde Code hacia Flow.
