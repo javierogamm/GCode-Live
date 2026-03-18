@@ -314,12 +314,61 @@ const renderActiveTemplateDetails = () => {
     }
 };
 
+function extractProjectLinkInfo(data = {}) {
+    if (!data || typeof data !== "object") {
+        return {
+            sync_code: "",
+            linked_flow_id: "",
+            linked_flow_name: ""
+        };
+    }
+
+    const proyecto = data.proyecto && typeof data.proyecto === "object" ? data.proyecto : {};
+    const vinc = proyecto.vinculacionFlow && typeof proyecto.vinculacionFlow === "object"
+        ? proyecto.vinculacionFlow
+        : (data.vinculacionFlow && typeof data.vinculacionFlow === "object" ? data.vinculacionFlow : {});
+
+    return {
+        sync_code: vinc.sync_code || proyecto.sync_code || data.sync_code || "",
+        linked_flow_id: vinc.linked_flow_id || proyecto.linked_flow_id || data.linked_flow_id || "",
+        linked_flow_name: vinc.linked_flow_name || proyecto.linked_flow_name || data.linked_flow_name || ""
+    };
+}
+
+function buildProjectPayload() {
+    const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
+        ? DataTesauro.campos
+        : [];
+    const linked = saveProjectState.loadedProject || {};
+
+    return {
+        proyecto: {
+            nombre: projectState.name || (projectNameInput ? projectNameInput.value.trim() : ""),
+            plantillas: projectState.templates.map((tpl) => ({
+                nombre: tpl.name,
+                tipo: normalizeTemplateType(tpl.type),
+                markdown: tpl.markdown
+            })),
+            plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : "",
+            vinculacionFlow: {
+                sync_code: linked.sync_code || "",
+                linked_flow_id: linked.linked_flow_id || "",
+                linked_flow_name: linked.linked_flow_name || ""
+            }
+        },
+        tesauros
+    };
+}
+
 const applyProjectData = (data) => {
-    if (!data || typeof data !== "object") return;
+    if (!data || typeof data !== "object") {
+        return extractProjectLinkInfo();
+    }
     const tesauros = Array.isArray(data.tesauros) ? data.tesauros : [];
     const proyecto = data.proyecto || {};
     const plantillas = proyecto.plantillas || data.plantillas || data.templates || null;
     const projectName = proyecto.nombre || data.nombreProyecto || data.projectName || "";
+    const linkInfo = extractProjectLinkInfo(data);
 
     if (typeof data.markdown === "string" && !plantillas) {
         const fallbackName = proyecto.plantilla || data.plantilla || "Plantilla 1";
@@ -347,6 +396,8 @@ const applyProjectData = (data) => {
             DataTesauro.render();
         }
     }
+
+    return linkInfo;
 };
 
 function ensureTemplateManagerModal() {
@@ -542,23 +593,8 @@ if (btnExportProyecto) {
         syncActiveTemplateMarkdown();
         const projectName = projectState.name || (projectNameInput ? projectNameInput.value.trim() : "");
 
-        // Coger lista completa de tesauros desde DataTesauro
-        const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
-            ? DataTesauro.campos
-            : [];
-
-        const proyecto = {
-            proyecto: {
-                nombre: projectName,
-                plantillas: projectState.templates.map((tpl) => ({
-                    nombre: tpl.name,
-                    tipo: normalizeTemplateType(tpl.type),
-                    markdown: tpl.markdown
-                })),
-                plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
-            },
-            tesauros: tesauros
-        };
+        projectState.name = projectName;
+        const proyecto = buildProjectPayload();
 
         const jsonStr = JSON.stringify(proyecto, null, 2);
         const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
@@ -590,8 +626,8 @@ if (btnImportProyecto) {
                     const data = JSON.parse(raw);
 
                     // 1) Restaurar markdown
-                    applyProjectData(data);
-                    setLoadedProjectState(null);
+                    const linkInfo = applyProjectData(data);
+                    setLoadedProjectState(linkInfo.sync_code || linkInfo.linked_flow_id || linkInfo.linked_flow_name ? linkInfo : null);
                     markProjectAsDirty();
 
                     alert("✔ Proyecto importado correctamente.");
@@ -947,21 +983,8 @@ function ensureSaveProjectModal() {
         }
 
         setProjectName(proyectoNombre);
-        const tesauros = (window.DataTesauro && Array.isArray(DataTesauro.campos))
-            ? DataTesauro.campos
-            : [];
-        const procedimiento = {
-            proyecto: {
-                nombre: proyectoNombre,
-                plantillas: projectState.templates.map((tpl) => ({
-                    nombre: tpl.name,
-                    tipo: normalizeTemplateType(tpl.type),
-                    markdown: tpl.markdown
-                })),
-                plantillaActiva: getActiveTemplate() ? getActiveTemplate().name : ""
-            },
-            tesauros
-        };
+        projectState.name = proyectoNombre;
+        const procedimiento = buildProjectPayload();
 
         try {
             const plantillaResumen = composePlantillaResumen();
@@ -1207,15 +1230,15 @@ function ensureProjectHistoryModal() {
                 savedData = null;
             }
 
-            applyProjectData(payload);
+            const linkInfo = applyProjectData(payload);
             setLoadedProjectState({
                 id: savedData?.id || project.id || null,
                 proyecto: proyectoNombre,
                 subfuncion: project.subfuncion || "",
                 user: savedData?.user || currentUser,
-                sync_code: savedData?.sync_code || project.sync_code || "",
-                linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
-                linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+                sync_code: savedData?.sync_code || project.sync_code || linkInfo.sync_code || "",
+                linked_flow_id: linkInfo.linked_flow_id || "",
+                linked_flow_name: linkInfo.linked_flow_name || ""
             });
             saveProjectState.activeSubfuncion = project.subfuncion || "";
             markProjectAsSaved();
@@ -1239,15 +1262,15 @@ function ensureProjectHistoryModal() {
         try {
             const payload = typeof version?.json === "string" ? JSON.parse(version.json) : version?.json;
             if (!payload || typeof payload !== "object") throw new Error("Versión inválida");
-            applyProjectData(payload);
+            const linkInfo = applyProjectData(payload);
             setLoadedProjectState({
                 id: historyProjectState.currentProject?.id || null,
                 proyecto: historyProjectState.currentProject?.proyecto || "",
                 subfuncion: historyProjectState.currentProject?.subfuncion || "",
                 user: historyProjectState.currentProject?.user || "",
-                sync_code: historyProjectState.currentProject?.sync_code || "",
-                linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
-                linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+                sync_code: historyProjectState.currentProject?.sync_code || linkInfo.sync_code || "",
+                linked_flow_id: linkInfo.linked_flow_id || "",
+                linked_flow_name: linkInfo.linked_flow_name || ""
             });
             setStatus("Versión cargada correctamente.", false);
             markProjectAsSaved();
@@ -1984,15 +2007,15 @@ function ensureLoadProjectModal() {
                     if (!payload || typeof payload !== "object") {
                         throw new Error("Proyecto inválido.");
                     }
-                    applyProjectData(payload);
+                    const linkInfo = applyProjectData(payload);
                     setLoadedProjectState({
                         id: project.id || null,
                         proyecto: project.proyecto || "",
                         subfuncion: project.subfuncion || "",
                         user: project.user || "",
-                        sync_code: project.sync_code || data?.sync_code || "",
-                        linked_flow_id: saveProjectState.loadedProject?.linked_flow_id || "",
-                        linked_flow_name: saveProjectState.loadedProject?.linked_flow_name || ""
+                        sync_code: project.sync_code || data?.sync_code || linkInfo.sync_code || "",
+                        linked_flow_id: linkInfo.linked_flow_id || "",
+                        linked_flow_name: linkInfo.linked_flow_name || ""
                     });
                     saveProjectState.activeSubfuncion = project.subfuncion || "";
                     setStatus("Proyecto cargado correctamente.", false);
@@ -2129,7 +2152,7 @@ if (btnSincronizarCode) {
         }
 
         try {
-            registerSyncLog({ level: "info", stage: "sync_button", detail: `Intento de sync project=${projectId || "-"} sync_code=${syncCode || "-"}` });
+            registerSyncLog({ level: "info", stage: "send_templates_button", detail: `Intento de envío project=${projectId || "-"} sync_code=${syncCode || "-"}` });
             const flowQuery = linkedFlowId
                 ? `id=${encodeURIComponent(linkedFlowId)}`
                 : `sync_code=${encodeURIComponent(syncCode)}`;
@@ -2151,7 +2174,7 @@ if (btnSincronizarCode) {
             }
             const resolvedFlowId = flow?.id || linkedFlowId;
             if (!resolvedFlowId) {
-                throw new Error("No se pudo resolver el flow a sincronizar");
+                throw new Error("No se pudo resolver el flow al que enviar las plantillas");
             }
 
             const flowPayload = extractFlowPayload(flow);
@@ -2159,19 +2182,7 @@ if (btnSincronizarCode) {
                 throw new Error("El flow vinculado no tiene JSON válido");
             }
 
-            const addedTemplates = appendMissingTemplatesFromFlow(flowPayload);
-            if (addedTemplates.length) {
-                registerSyncLog({
-                    level: "info",
-                    stage: "sync_new_nodes",
-                    detail: `Se añadieron ${addedTemplates.length} plantillas vacías por nodos nuevos del flow`,
-                    extra: addedTemplates.map((tpl) => tpl.name)
-                });
-            }
-
-            const addedIds = new Set(addedTemplates.map((tpl) => tpl.id));
-            const templatesForSync = (projectState.templates || []).filter((tpl) => !addedIds.has(tpl.id));
-            const nextFlowPayload = mergeTemplatesIntoFlowPayload(flowPayload, templatesForSync);
+            const nextFlowPayload = mergeTemplatesIntoFlowPayload(flowPayload, projectState.templates || []);
             const syncResponse = await fetch("/api/process-flows", {
                 method: "POST",
                 headers: {
@@ -2186,7 +2197,7 @@ if (btnSincronizarCode) {
             });
 
             if (!syncResponse.ok) {
-                let errorText = "No se pudo sincronizar con Process";
+                let errorText = "No se pudieron enviar las plantillas a Flow";
                 try {
                     const payload = await syncResponse.json();
                     if (payload?.error) errorText = payload.error;
@@ -2214,14 +2225,11 @@ if (btnSincronizarCode) {
                 linked_flow_id: resolvedFlowId,
                 linked_flow_name: getFlowDisplayName(flow)
             });
-            const addedMsg = addedTemplates.length
-                ? ` Se añadieron ${addedTemplates.length} plantillas nuevas vacías en Code.`
-                : "";
-            alert(`Sincronización completada: las plantillas de Code se enviaron al flow vinculado.${addedMsg}`);
+            alert("Envío completado: las plantillas de Code se han enviado y sobrescrito en el flow vinculado.");
         } catch (error) {
-            registerSyncLog({ level: "error", stage: "sync_button", detail: error?.message || "Error desconocido al sincronizar" });
+            registerSyncLog({ level: "error", stage: "send_templates_button", detail: error?.message || "Error desconocido al enviar plantillas" });
             console.error(error);
-            alert(error?.message || "No se pudo sincronizar con Process.");
+            alert(error?.message || "No se pudieron enviar las plantillas a Flow.");
         }
     });
 }

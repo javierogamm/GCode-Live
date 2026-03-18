@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.73 - 2026-03-18
+- Se sustituyó el botón lateral **"Sincronizar Code"** por **"Enviar plantillas a Flow"**, dejando explícito que la acción solo envía las plantillas locales y sobrescribe las existentes en Flow.
+- La acción de envío ya no crea plantillas vacías nuevas en Code al consultar el flow vinculado; ahora conserva el criterio operativo definido: tras la primera vinculación, el sentido de trabajo es siempre desde Code hacia Flow.
+- El guardado/exportación/importación/carga/restauración de proyectos ahora conserva la vinculación con Flow (`sync_code`, `linked_flow_id`, `linked_flow_name`) dentro del JSON del proyecto para reutilizarla en sesiones posteriores.
+- Al cargar o importar un proyecto vinculado, se restauran sus plantillas locales y su vínculo existente sin volver a hidratar plantillas desde Flow, evitando que las plantillas remotas machaquen las de Code.
+- Se actualizó la versión visible de la app a `v1.3.73` y la versión del proyecto en `package.json` a `1.3.73`.
+
 ## v1.3.72 - 2026-03-18
 - En el modal de **Cargar proyecto**, el botón **Historial** ahora está disponible para cualquier usuario autenticado, no solo para el creador del registro.
 - El historial de guardados mantiene y muestra todas las versiones consolidadas del proyecto indicando el usuario que realizó cada guardado/sobrescritura.
