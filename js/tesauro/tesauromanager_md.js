@@ -3143,7 +3143,11 @@ row.appendChild(tdDel);
                     }
                 }
                 if (value === startValue) return;
+                const previousRef = field === "ref" ? (item.ref || "") : "";
                 item[field] = value;
+                if (field === "ref") {
+                    this.propagateReferenceChange(previousRef, value);
+                }
                 this.recordHistory();
             });
         });
@@ -3241,7 +3245,9 @@ row.appendChild(tdDel);
                 }
 
                 const refFinal = this.getUniqueReference(refBase, id);
+                const previousRef = item.ref || "";
                 item.ref = refFinal;
+                this.propagateReferenceChange(previousRef, refFinal);
 
                 const refEl = this.modal.querySelector(`[data-field="ref"][data-id="${id}"]`);
                 if (refEl) refEl.innerText = refFinal;
@@ -3522,6 +3528,15 @@ row.appendChild(tdDel);
         return opts.map(o => `${o.ref} = ${o.valor}`).join("\n");
     },
 
+    propagateReferenceChange(previousRef, nextRef) {
+        const oldRef = (previousRef || "").toString().trim();
+        const newRef = (nextRef || "").toString().trim();
+        if (!oldRef || !newRef || oldRef === newRef) return;
+        if (typeof window.renameTesauroReferenceAcrossProjectTemplates === "function") {
+            window.renameTesauroReferenceAcrossProjectTemplates(oldRef, newRef);
+        }
+    },
+
     /* ---------------------------------------------
        Guardar cambios al DataTesauro
     --------------------------------------------- */
@@ -3535,6 +3550,7 @@ row.appendChild(tdDel);
             const item = lista.find(x => x.id === id);
             if (item && (field === "ref" || field === "nombre")) {
                 let value = el.innerText.trim();
+                const previousRef = field === "ref" ? (item.ref || "") : "";
                 if (field === "ref") {
                     value = this.limitReferenceLength(value);
                     if (this.hasReference(value, id)) {
@@ -3543,6 +3559,9 @@ row.appendChild(tdDel);
                     el.innerText = value;
                 }
                 item[field] = value;
+                if (field === "ref") {
+                    this.propagateReferenceChange(previousRef, value);
+                }
             }
         });
 

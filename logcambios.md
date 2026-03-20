@@ -1,5 +1,11 @@
 # Log de cambios
 
+## v1.3.80 - 2026-03-20
+- Al editar la referencia de un tesauro en el gestor, la nueva referencia ahora se propaga automáticamente a todas las representaciones del tesauro dentro de todas las plantillas del proyecto vinculadas al editor.
+- Los listados del selector de plantillas y las plantillas cargadas al vincular con Process ahora se presentan ordenados alfabéticamente por nombre para facilitar la selección.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.80` y la versión del proyecto en `package.json` a `1.3.80`.
+
 ## v1.3.79 - 2026-03-18
 - El botón rápido **💾** ahora confirma explícitamente **"Se ha guardado el proyecto"** cuando la sobrescritura rápida del proyecto finaliza correctamente.
 - Se documentó esta consolidación en el log de cambios.

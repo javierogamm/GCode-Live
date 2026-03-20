@@ -260,6 +260,18 @@ const templateManagerState = {
 
 const createTemplateId = () => `tpl_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 
+const compareTemplatesByName = (a, b) => {
+    const nameA = (a?.name || a?.nombre || "").toString().trim();
+    const nameB = (b?.name || b?.nombre || "").toString().trim();
+    return nameA.localeCompare(nameB, "es", { sensitivity: "base", numeric: true });
+};
+
+const sortProjectTemplatesByName = () => {
+    projectState.templates.sort(compareTemplatesByName);
+};
+
+const getSortedProjectTemplates = () => [...(projectState.templates || [])].sort(compareTemplatesByName);
+
 const getActiveTemplate = () => projectState.templates.find((tpl) => tpl.id === projectState.activeTemplateId) || null;
 
 const syncActiveTemplateMarkdown = () => {
@@ -271,12 +283,58 @@ const syncActiveTemplateMarkdown = () => {
 
 window.getProjectTemplatesSnapshot = () => {
     syncActiveTemplateMarkdown();
-    return (projectState.templates || []).map((tpl) => ({
+    return getSortedProjectTemplates().map((tpl) => ({
         id: tpl.id,
         name: tpl.name || "",
         type: normalizeTemplateType(tpl.type || "Documento"),
         markdown: typeof tpl.markdown === "string" ? tpl.markdown : ""
     }));
+};
+
+window.renameTesauroReferenceAcrossProjectTemplates = (previousRef = "", nextRef = "") => {
+    const oldRef = (previousRef || "").toString().trim();
+    const newRef = (nextRef || "").toString().trim();
+    if (!oldRef || !newRef || oldRef === newRef) return false;
+
+    syncActiveTemplateMarkdown();
+
+    const escapeForRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const oldRefEscaped = escapeForRegex(oldRef);
+    const replacements = [
+        [new RegExp(`(reference\\s*:\\s*)${oldRefEscaped}(\\s*(?:\\||\\}\\}))`, "gi"), `$1${newRef}$2`],
+        [new RegExp(`(reference\\s*:\\s*(?:personalized|function)\\s*\\.\\s*)${oldRefEscaped}(\\s*(?:\\||\\}\\}))`, "gi"), `$1${newRef}$2`],
+        [new RegExp(`(\\bpersonalized\\s*\\.\\s*)${oldRefEscaped}(\\b)`, "gi"), `$1${newRef}$2`],
+        [new RegExp(`(\\bfunction\\s*\\.\\s*)${oldRefEscaped}(\\b)`, "gi"), `$1${newRef}$2`],
+        [new RegExp(`(\\bvariable\\s*\\.\\s*)${oldRefEscaped}(\\b)`, "gi"), `$1${newRef}$2`]
+    ];
+
+    let changed = false;
+    projectState.templates.forEach((tpl) => {
+        const currentMarkdown = typeof tpl.markdown === "string" ? tpl.markdown : "";
+        let updatedMarkdown = currentMarkdown;
+        replacements.forEach(([pattern, replacement]) => {
+            updatedMarkdown = updatedMarkdown.replace(pattern, replacement);
+        });
+        if (updatedMarkdown !== currentMarkdown) {
+            tpl.markdown = updatedMarkdown;
+            changed = true;
+        }
+    });
+
+    if (changed) {
+        const active = getActiveTemplate();
+        if (active && markdownText) {
+            markdownText.value = active.markdown || "";
+            resetUndoStacks(markdownText.value);
+            if (typeof window.updateHighlight === "function") {
+                updateHighlight();
+            }
+            updateLineNumbers();
+        }
+        markProjectAsDirty();
+    }
+
+    return changed;
 };
 
 const resetUndoStacks = (value) => {
@@ -313,6 +371,7 @@ const setTemplates = (templates = [], activeName = "") => {
         type: normalizeTemplateType(tpl.type || tpl.tipo),
         markdown: typeof tpl.markdown === "string" ? tpl.markdown : ""
     }));
+    sortProjectTemplatesByName();
     if (!projectState.templates.length) {
         const fallback = {
             id: createTemplateId(),
@@ -344,6 +403,7 @@ const addTemplate = (name, markdown = "", type = "Documento") => {
         markdown
     };
     projectState.templates.push(template);
+    sortProjectTemplatesByName();
     projectState.activeTemplateId = template.id;
     if (markdownText) {
         markdownText.value = template.markdown;
@@ -545,7 +605,7 @@ function ensureTemplateManagerModal() {
             list.innerHTML = `<div class="muted">Aún no hay plantillas.</div>`;
             return;
         }
-        projectState.templates.forEach((tpl) => {
+        getSortedProjectTemplates().forEach((tpl) => {
             const row = document.createElement("div");
             row.className = "template-item" + (tpl.id === projectState.activeTemplateId ? " active" : "");
             const name = document.createElement("span");
@@ -1058,7 +1118,7 @@ function ensureSaveProjectModal() {
             list.innerHTML = `<div class="muted">No hay plantillas locales aún.</div>`;
             return;
         }
-        projectState.templates.forEach((tpl) => {
+        getSortedProjectTemplates().forEach((tpl) => {
             const row = document.createElement("div");
             row.className = "save-project-item";
             const name = document.createElement("span");
@@ -1841,6 +1901,7 @@ function appendMissingTemplatesFromFlow(flowPayload = {}) {
             markdown: ""
         };
         projectState.templates.push(template);
+        sortProjectTemplatesByName();
         existingNames.add(finalName.toLowerCase());
         addedTemplates.push(template);
     });
@@ -1990,7 +2051,9 @@ function ensureProcessLinkModal() {
             return;
         }
 
-        processLinkState.flows.forEach((flow) => {
+        [...processLinkState.flows].sort((a, b) => {
+            return getFlowDisplayName(a).localeCompare(getFlowDisplayName(b), "es", { sensitivity: "base", numeric: true });
+        }).forEach((flow) => {
             const row = document.createElement("div");
             row.className = "load-project-item";
 
