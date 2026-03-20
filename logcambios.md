@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.82 - 2026-03-20
+- Se añadió el botón rápido **🧠 Insertar Function** justo a la derecha de **📚 Insertar Tesauro** en la fila superior de acciones del editor.
+- El nuevo selector muestra las functions agrupadas por bloque (**FECHA**, **EXPEDIENTE** e **INICIACIÓN**), enseñando solo el nombre funcional en el desplegable.
+- Al confirmar una opción, la app inserta en el Markdown la referencia `{{function | reference : ...}}` asociada a la function seleccionada.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.82` y la versión del proyecto en `package.json` a `1.3.82`.
+
 ## v1.3.81 - 2026-03-20
 - El modal del gestor de tesauros amplió su tamaño útil para mostrar más contenido por pantalla, aumentando el ancho efectivo aproximadamente un 30% y la altura un 15% dentro de los límites visibles de la ventana.
 - Se documentó esta consolidación en el log de cambios.
