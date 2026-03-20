@@ -35,6 +35,75 @@ const DataTesauro = {
     quickCreateTypeSelect: null,
     quickRefEdited: false,
 
+    // Selector rápido de functions
+    functionModal: null,
+    functionSelect: null,
+    functionPreview: null,
+    functionGroups: [
+        {
+            id: "fecha",
+            title: "FECHA",
+            items: [
+                {
+                    label: "Fecha y hora actual",
+                    value: "{{function | reference : CurrentDate#long-date}}"
+                }
+            ]
+        },
+        {
+            id: "expediente",
+            title: "EXPEDIENTE",
+            items: [
+                {
+                    label: "Código del expediente",
+                    value: "{{function | reference : Folder_Code}}"
+                },
+                {
+                    label: "Procedimiento",
+                    value: "{{function | reference : Folder_Procedure}}"
+                },
+                {
+                    label: "Unidad Gestora",
+                    value: "{{function | reference : Folder_ManagementUnit}}"
+                },
+                {
+                    label: "Asunto del expediente",
+                    value: "{{function | reference : Folder_Title}}"
+                }
+            ]
+        },
+        {
+            id: "iniciacion",
+            title: "INICIACIÓN",
+            items: [
+                {
+                    label: "Fecha de solicitud",
+                    value: "{{function | reference : NewCatalog_Initiation#annotation-datetime}}"
+                },
+                {
+                    label: "Nº Registro",
+                    value: "{{function | reference : NewCatalog_Initiation#annotation-code}}"
+                },
+                {
+                    label: "NIF Solicitante",
+                    value: "{{function | reference : NewCatalog_Initiation#solicitor-nif}}"
+                },
+                {
+                    label: "Nombre solicitante",
+                    value: "{{function | reference : NewCatalog_Initiation#solicitor-name}}"
+                },
+                {
+                    label: "NIF Representante",
+                    value: "{{function | reference : NewCatalog_Initiation#representant-nif}}"
+                },
+                {
+                    label: "Nombre Representante",
+                    value: "{{function | reference : NewCatalog_Initiation#representant-name}}"
+                }
+            ]
+        }
+    ],
+
     /* =======================================
        INICIALIZAR PARA ESTE EDITOR
        ======================================= */
@@ -85,6 +154,28 @@ const DataTesauro = {
         }
         if (typeof window.ensureQuickProjectButtons === "function") {
             window.ensureQuickProjectButtons();
+        }
+
+        if (!document.getElementById("btnFunction")) {
+            const functionBtn = document.createElement("button");
+            functionBtn.id = "btnFunction";
+            functionBtn.className = "floating-action-btn floating-function-btn";
+            functionBtn.textContent = "🧠 Insertar Function";
+
+            if (floatingRow) {
+                const tesauroBtn = document.getElementById("btnTesauro");
+                if (tesauroBtn && tesauroBtn.nextSibling) {
+                    floatingRow.insertBefore(functionBtn, tesauroBtn.nextSibling);
+                } else {
+                    floatingRow.appendChild(functionBtn);
+                }
+            } else {
+                document.body.appendChild(functionBtn);
+            }
+
+            functionBtn.addEventListener("click", () => {
+                this.openFunctionModal();
+            });
         }
         // === NUEVO BOTÓN FLOTANTE: acceso directo al gestor completo ===
         if (!document.getElementById("btnTesauroManagerFloating")) {
@@ -369,7 +460,17 @@ const DataTesauro = {
        INSERCIÓN EN MARKDOWN
        ======================================= */
     insertReferenceIntoMarkdown(refTesauro) {
-        if (!this.targetTextarea) return;
+        const marker = ` {{personalized | reference: ${refTesauro}}} `;
+        this.insertTextIntoMarkdown(marker);
+    },
+
+    insertFunctionIntoMarkdown(functionRef) {
+        const marker = ` ${functionRef} `;
+        this.insertTextIntoMarkdown(marker);
+    },
+
+    insertTextIntoMarkdown(textToInsert) {
+        if (!this.targetTextarea || !textToInsert) return;
 
         const ta = this.targetTextarea;
         ta.focus();
@@ -377,15 +478,109 @@ const DataTesauro = {
         const start = ta.selectionStart;
         const end = ta.selectionEnd;
 
-        const marker = ` {{personalized | reference: ${refTesauro}}} `;
-
-        ta.setRangeText(marker, start, end, "end");
+        ta.setRangeText(textToInsert, start, end, "end");
         if (typeof window.recordUndoAfterChange === "function") {
             recordUndoAfterChange(ta);
         }
 
-        // update highlight (ya se dispara por input, pero por si acaso)
         if (window.updateHighlight) updateHighlight();
+    },
+
+    /* =======================================
+       SELECTOR RÁPIDO DE FUNCTIONS
+       ======================================= */
+    openFunctionModal() {
+        if (!this.functionModal) {
+            this.buildFunctionModal();
+        }
+
+        if (!this.functionModal || !this.functionSelect) return;
+
+        this.functionSelect.selectedIndex = 0;
+        this.updateFunctionPreview();
+        this.functionModal.style.display = "flex";
+        this.functionSelect.focus();
+    },
+
+    closeFunctionModal() {
+        if (this.functionModal) {
+            this.functionModal.style.display = "none";
+        }
+    },
+
+    buildFunctionModal() {
+        const overlay = document.createElement("div");
+        overlay.id = "tesauroFunctionSelector";
+        overlay.className = "tesauro-function-modal";
+
+        const optionsHtml = this.functionGroups.map(group => {
+            const items = (group.items || []).map(item => `
+                <option value="${this.escapeAttr(item.value)}">${this.escapeHtml(item.label)}</option>
+            `).join("");
+            return `<optgroup label="${this.escapeAttr(group.title)}">${items}</optgroup>`;
+        }).join("");
+
+        overlay.innerHTML = `
+            <div class="tesauro-function-card">
+                <h2>🧠 Insertar Function</h2>
+                <p class="tesauro-function-help">Selecciona una function agrupada por categoría. Se insertará directamente en el Markdown.</p>
+
+                <label class="tesauro-function-label" for="functionQuickSelect">Function</label>
+                <select id="functionQuickSelect" class="tesauro-function-select">
+                    <option value="">Selecciona una function…</option>
+                    ${optionsHtml}
+                </select>
+
+                <div class="tesauro-function-preview-wrap">
+                    <span class="tesauro-function-preview-label">Vista previa</span>
+                    <code id="functionQuickPreview" class="tesauro-function-preview">Selecciona una function para ver su referencia.</code>
+                </div>
+
+                <div class="tesauro-function-actions">
+                    <button id="functionQuickCancel" type="button" class="tesauro-function-btn tesauro-function-btn-secondary">Cancelar</button>
+                    <button id="functionQuickInsert" type="button" class="tesauro-function-btn tesauro-function-btn-primary">Insertar</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        this.functionModal = overlay;
+        this.functionSelect = overlay.querySelector("#functionQuickSelect");
+        this.functionPreview = overlay.querySelector("#functionQuickPreview");
+
+        const btnCancel = overlay.querySelector("#functionQuickCancel");
+        const btnInsert = overlay.querySelector("#functionQuickInsert");
+
+        if (this.functionSelect) {
+            this.functionSelect.addEventListener("change", () => this.updateFunctionPreview());
+        }
+
+        if (btnCancel) {
+            btnCancel.addEventListener("click", () => this.closeFunctionModal());
+        }
+
+        if (btnInsert) {
+            btnInsert.addEventListener("click", () => {
+                const value = this.functionSelect ? this.functionSelect.value : "";
+                if (!value) {
+                    alert("Debes seleccionar una function.");
+                    return;
+                }
+
+                this.insertFunctionIntoMarkdown(value);
+                this.closeFunctionModal();
+            });
+        }
+
+        overlay.addEventListener("click", (e) => {
+            if (e.target === overlay) this.closeFunctionModal();
+        });
+    },
+
+    updateFunctionPreview() {
+        if (!this.functionPreview) return;
+        const value = this.functionSelect ? this.functionSelect.value : "";
+        this.functionPreview.textContent = value || "Selecciona una function para ver su referencia.";
     },
 
     /* =======================================
@@ -670,6 +865,16 @@ const DataTesauro = {
     escapeAttr(str) {
         if (!str) return "";
         return String(str).replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    },
+
+    escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
     },
     limitReferenceLength(ref, max = 40) {
         if (!ref) return "";

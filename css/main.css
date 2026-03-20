@@ -498,6 +498,114 @@ body {
   box-shadow: 0 6px 15px rgba(0,0,0,0.35);
 }
 
+#btnFunction {
+  background: #7c3aed;
+}
+
+#btnFunction:hover {
+  background: #8b5cf6;
+}
+
+.tesauro-function-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+  padding: 16px;
+}
+
+.tesauro-function-card {
+  width: 460px;
+  max-width: 100%;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tesauro-function-card h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #111827;
+}
+
+.tesauro-function-help,
+.tesauro-function-preview-label,
+.tesauro-function-label {
+  color: #475569;
+  font-size: 13px;
+}
+
+.tesauro-function-help {
+  margin: 0;
+}
+
+.tesauro-function-select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: #fff;
+  color: #0f172a;
+}
+
+.tesauro-function-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tesauro-function-preview {
+  display: block;
+  white-space: normal;
+  word-break: break-word;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.tesauro-function-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.tesauro-function-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tesauro-function-btn-secondary {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.tesauro-function-btn-primary {
+  background: #7c3aed;
+  color: #fff;
+}
+
+.tesauro-function-btn-secondary:hover {
+  background: #cbd5e1;
+}
+
+.tesauro-function-btn-primary:hover {
+  background: #8b5cf6;
+}
+
 .tesauro-panel {
   position: fixed;
   top: 0;
