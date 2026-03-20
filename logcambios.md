@@ -1,5 +1,10 @@
 # Log de cambios
 
+## v1.3.81 - 2026-03-20
+- El modal del gestor de tesauros amplió su tamaño útil para mostrar más contenido por pantalla, aumentando el ancho efectivo aproximadamente un 30% y la altura un 15% dentro de los límites visibles de la ventana.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.81` y la versión del proyecto en `package.json` a `1.3.81`.
+
 ## v1.3.80 - 2026-03-20
 - Al editar la referencia de un tesauro en el gestor, la nueva referencia ahora se propaga automáticamente a todas las representaciones del tesauro dentro de todas las plantillas del proyecto vinculadas al editor.
 - Los listados del selector de plantillas y las plantillas cargadas al vincular con Process ahora se presentan ordenados alfabéticamente por nombre para facilitar la selección.

@@ -80,8 +80,10 @@ const TesauroManager = {
 
     
         background:white;
-        width:90%;
-        height:85%;
+        width:min(96vw, calc(90vw * 1.3));
+        height:min(98vh, calc(85vh * 1.15));
+        max-width:1800px;
+        max-height:1200px;
         border-radius:12px;
         padding:20px;
         display:flex;
