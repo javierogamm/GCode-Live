@@ -798,9 +798,10 @@ body {
 #tesauroManagerModal > div {
   background: #ffffff !important;
   color: #1f2937 !important;
-  width: 95% !important;
-  max-width: 1400px !important;
-  max-height: 95vh !important;
+  width: min(96vw, 1600px) !important;
+  height: min(94vh, 980px) !important;
+  max-width: 1600px !important;
+  max-height: 94vh !important;
   border-radius: 12px !important;
 }
 
