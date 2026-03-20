@@ -72,16 +72,18 @@ const TesauroManager = {
         div.style.zIndex = "99999";
         div.style.justifyContent = "center";
         div.style.alignItems = "center";
+        div.style.padding = "16px";
         div.style.backdropFilter = "blur(2px)";
 
         // === Caja interna ===
         div.innerHTML = `
     <div id="tmBox" style="
-
-    
+        position:relative;
         background:white;
-        width:90%;
-        height:85%;
+        width:min(96vw, 1600px);
+        height:min(94vh, 980px);
+        max-width:1600px;
+        max-height:94vh;
         border-radius:12px;
         padding:20px;
         display:flex;
@@ -91,8 +93,8 @@ const TesauroManager = {
     ">
     <div id="tmHistoryControls" style="
     position:absolute;
-    top:50px;
-    left:64px;
+    top:20px;
+    left:20px;
     display:flex;
     gap:8px;
 ">    
@@ -123,8 +125,8 @@ const TesauroManager = {
     </div>
     <button id="tmCloseX" style=" 
     position:absolute;
-    top:50px;
-    right:64px;
+    top:20px;
+    right:20px;
     background:#fee2e2;
     border:1px solid #f41313ff;
     color:#991b1b;
@@ -137,7 +139,7 @@ const TesauroManager = {
     box-shadow:0 2px 6px rgba(0,0,0,0.25);
 ">✖</button>
         <h2 style="
-            margin:0 0 15px 0;
+            margin:0 56px 15px;
             text-align:center;
             font-size:22px;
             color:#0f172a;
