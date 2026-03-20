@@ -70,31 +70,29 @@ const TesauroManager = {
         div.style.background = "rgba(0,0,0,0.55)";
         div.style.display = "none";
         div.style.zIndex = "99999";
-        div.style.justifyContent = "stretch";
-        div.style.alignItems = "stretch";
-        div.style.padding = "0";
+        div.style.justifyContent = "center";
+        div.style.alignItems = "center";
         div.style.backdropFilter = "blur(2px)";
 
         // === Caja interna ===
         div.innerHTML = `
     <div id="tmBox" style="
-        position:relative;
+
+    
         background:white;
-        width:100vw;
-        height:100vh;
-        max-width:none;
-        max-height:none;
-        border-radius:0;
-        padding:20px 24px 24px;
+        width:90%;
+        height:85%;
+        border-radius:12px;
+        padding:20px;
         display:flex;
         flex-direction:column;
-        box-shadow:none;
+        box-shadow:0 6px 20px rgba(0,0,0,0.35);
         overflow:hidden;
     ">
     <div id="tmHistoryControls" style="
     position:absolute;
-    top:20px;
-    left:24px;
+    top:50px;
+    left:64px;
     display:flex;
     gap:8px;
 ">    
@@ -125,8 +123,8 @@ const TesauroManager = {
     </div>
     <button id="tmCloseX" style=" 
     position:absolute;
-    top:20px;
-    right:24px;
+    top:50px;
+    right:64px;
     background:#fee2e2;
     border:1px solid #f41313ff;
     color:#991b1b;
@@ -139,7 +137,7 @@ const TesauroManager = {
     box-shadow:0 2px 6px rgba(0,0,0,0.25);
 ">✖</button>
         <h2 style="
-            margin:0 48px 15px;
+            margin:0 0 15px 0;
             text-align:center;
             font-size:22px;
             color:#0f172a;
