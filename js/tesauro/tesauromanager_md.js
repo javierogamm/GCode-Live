@@ -41,6 +41,8 @@ const TesauroManager = {
     // Modal crear tesauro individual
     createModal: null,
     createRefEdited: false,
+    createRefFeedback: null,
+    lastReferenceWarningAt: 0,
 
     // Import / export
     pasteArea: null,
@@ -429,6 +431,7 @@ const TesauroManager = {
                     width:100%; padding:6px; border-radius:6px; border:1px solid #cbd5e1;
                     font-size:13px;
                 " placeholder="Referencia" maxlength="40">
+                <span id="tmCreateRefFeedback" style="display:none; font-size:11px; color:#b45309;"></span>
 
                 <label style="font-size:13px; color:#111827;">Crear referencia</label>
                 <select id="tmCreateRef" style="
@@ -468,6 +471,7 @@ const TesauroManager = {
         this.btnBulkCreate = div.querySelector("#tmBulkCreateTesauro");
         this.exportModal = div.querySelector("#tmExportModal");
         this.createModal = div.querySelector("#tmCreateModal");
+        this.createRefFeedback = div.querySelector("#tmCreateRefFeedback");
         this.btnUndo = div.querySelector("#tmUndo");
         this.btnRedo = div.querySelector("#tmRedo");
 
@@ -564,10 +568,12 @@ const TesauroManager = {
 
             if (createRefInput) {
                 createRefInput.addEventListener("input", () => {
-                    const limited = this.limitReferenceLength(createRefInput.value);
+                    const details = this.sanitizeReferenceWithDetails(createRefInput.value);
+                    const limited = details.value;
                     if (createRefInput.value !== limited) {
                         createRefInput.value = limited;
                     }
+                    this.updateReferenceFeedback(this.createRefFeedback, details);
                     this.createRefEdited = true;
                 });
             }
@@ -3143,10 +3149,12 @@ row.appendChild(tdDel);
             });
             el.addEventListener("input", () => {
                 if (el.dataset.field === "ref") {
-                    const limited = this.limitReferenceLength(el.innerText);
+                    const details = this.sanitizeReferenceWithDetails(el.innerText);
+                    const limited = details.value;
                     if (el.innerText !== limited) {
                         el.innerText = limited;
                     }
+                    this.notifyInvalidReferenceAttempt(details);
                 }
             });
             el.addEventListener("blur", () => {
@@ -3419,7 +3427,8 @@ row.appendChild(tdDel);
 
                 const refInput = box.querySelector(".tm-new-opt-ref");
                 const valInput = box.querySelector(".tm-new-opt-valor");
-                const ref = this.limitReferenceLength((refInput?.value || "").trim());
+                const details = this.sanitizeReferenceWithDetails((refInput?.value || "").trim());
+                const ref = details.value;
                 const valor = (valInput?.value || "").trim();
 
                 // Si no hay nada, no hacemos nada
@@ -3428,6 +3437,7 @@ row.appendChild(tdDel);
                     alert("La referencia de la opción no puede estar vacía.");
                     return;
                 }
+                this.notifyInvalidReferenceAttempt(details);
 
                 if (!Array.isArray(item.opciones)) item.opciones = [];
 
@@ -3476,7 +3486,9 @@ row.appendChild(tdDel);
                 startValue = inp.value.trim();
             });
             inp.addEventListener("input", () => {
-                inp.value = this.limitReferenceLength(inp.value);
+                const details = this.sanitizeReferenceWithDetails(inp.value);
+                inp.value = details.value;
+                this.notifyInvalidReferenceAttempt(details);
                 const optRow = inp.closest(".tm-opt-row");
                 const box = inp.closest(".tm-opt-box");
                 if (!optRow || !box) return;
@@ -3784,10 +3796,43 @@ row.appendChild(tdDel);
     },
 
     limitReferenceLength(ref) {
+        return this.sanitizeReferenceWithDetails(ref).value;
+    },
+    sanitizeReferenceWithDetails(ref) {
         if (window.DataTesauro && typeof DataTesauro.limitReferenceLength === "function") {
-            return DataTesauro.limitReferenceLength(ref);
+            const original = (ref || "").toString().trim();
+            const value = DataTesauro.limitReferenceLength(ref);
+            return {
+                value,
+                trimmedByRule: original !== value,
+                original
+            };
         }
-        return (ref || "").toString().trim().replace(/\s+/g, "").replace(/[^A-Za-z0-9_]/g, "").slice(0, 40);
+        const original = (ref || "").toString().trim();
+        const value = original.replace(/\s+/g, "").replace(/[^A-Za-z0-9_]/g, "").slice(0, 40);
+        return {
+            value,
+            trimmedByRule: original !== value,
+            original
+        };
+    },
+    updateReferenceFeedback(feedbackEl, details) {
+        if (!feedbackEl) return;
+        if (!details?.trimmedByRule) {
+            feedbackEl.style.display = "none";
+            feedbackEl.textContent = "";
+            return;
+        }
+        feedbackEl.style.display = "block";
+        feedbackEl.textContent = `Referencia corregida: "${details.original}" no cumple las reglas (solo A-Z, 0-9 y _; máx. 40).`;
+        this.notifyInvalidReferenceAttempt(details);
+    },
+    notifyInvalidReferenceAttempt(details) {
+        if (!details?.trimmedByRule) return;
+        const now = Date.now();
+        if (now - this.lastReferenceWarningAt < 1200) return;
+        this.lastReferenceWarningAt = now;
+        console.warn(`Referencia no permitida detectada: ${details.original}`);
     },
     limitGroupingLength(text) {
         return (text || "").toString().trim().slice(0, 40);
@@ -3861,6 +3906,7 @@ row.appendChild(tdDel);
 
         const refFinal = this.getUniqueReference(suggestion);
         inRefInput.value = refFinal;
+        this.updateReferenceFeedback(this.createRefFeedback, this.sanitizeReferenceWithDetails(inRefInput.value));
         this.createRefEdited = false;
     },
 
@@ -3939,6 +3985,10 @@ row.appendChild(tdDel);
         if (inNombre) inNombre.value = "";
         if (inRefInput) inRefInput.value = "";
         if (inRef) inRef.value = "no";
+        if (this.createRefFeedback) {
+            this.createRefFeedback.style.display = "none";
+            this.createRefFeedback.textContent = "";
+        }
         this.updateCreateRefPreview();
         this.createModal.style.display = "flex";
         if (inNombre) inNombre.focus();

@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.84 - 2026-03-27
+- Se corrigió la regresión visual del modal rápido de creación de tesauros para que el desplegable **Tipo** vuelva a mostrarse correctamente alineado dentro del modal.
+- Al introducir referencias con caracteres no permitidos, ahora se muestra un mensaje explícito de corrección con el valor intentado, de forma visible para el usuario tanto en el modal rápido como en el modal de creación del gestor.
+- Se mantuvo la normalización de referencias (sin espacios, sin caracteres especiales y máximo 40) con trazabilidad visible de la corrección aplicada.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.84` y la versión del proyecto en `package.json` a `1.3.84`.
+
 ## v1.3.83 - 2026-03-27
 - Se reforzó la validación de referencias de tesauros para que no acepten espacios ni caracteres especiales, manteniendo límite máximo de 40 caracteres en creación rápida, gestor y edición de opciones de selectores.
 - Se aplicó límite de 40 caracteres a la agrupación de tesauros (edición individual y masiva en el gestor), normalizando el valor al guardar.
