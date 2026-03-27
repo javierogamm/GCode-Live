@@ -1,5 +1,12 @@
 # Log de cambios
 
+## v1.3.85 - 2026-03-27
+- Se corrigió definitivamente el problema visual del selector de **Tipo** en el modal rápido de creación: se sustituyó el desplegable nativo por un selector de botones en línea para evitar el popup descolocado.
+- El nuevo selector de tipo mantiene los mismos valores funcionales (`texto`, `selector`, `si_no`, `numero`, `moneda`, `fecha`) y sigue activando el bloque de opciones cuando se elige `selector`.
+- Se mantuvo el feedback visible de referencias corregidas por reglas de validación.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.85` y la versión del proyecto en `package.json` a `1.3.85`.
+
 ## v1.3.84 - 2026-03-27
 - Se corrigió la regresión visual del modal rápido de creación de tesauros para que el desplegable **Tipo** vuelva a mostrarse correctamente alineado dentro del modal.
 - Al introducir referencias con caracteres no permitidos, ahora se muestra un mensaje explícito de corrección con el valor intentado, de forma visible para el usuario tanto en el modal rápido como en el modal de creación del gestor.

@@ -32,7 +32,7 @@ const DataTesauro = {
     quickCreateNameInput: null,
     quickCreateRefInput: null,
     quickCreateRefSelect: null,
-    quickCreateTypeSelect: null,
+    quickCreateTypeInput: null,
     quickCreateSelectorOptionsWrap: null,
     quickCreateSelectorOptionsBody: null,
     quickCreateRefFeedback: null,
@@ -601,7 +601,7 @@ const DataTesauro = {
         if (this.quickCreateNameInput) this.quickCreateNameInput.value = "";
         if (this.quickCreateRefInput) this.quickCreateRefInput.value = "";
         if (this.quickCreateRefSelect) this.quickCreateRefSelect.value = "no";
-        if (this.quickCreateTypeSelect) this.quickCreateTypeSelect.value = "texto";
+        this.setQuickCreateType("texto");
         this.resetQuickSelectorOptions();
         this.toggleQuickSelectorOptions();
 
@@ -662,15 +662,15 @@ const DataTesauro = {
 
                 <label style="display:flex; flex-direction:column; gap:4px;">
                     <span style="font-size:12px; color:#6b7280;">Tipo</span>
-                    <select id="tesauroQuickType" style="
-                        width:100%; padding:7px 8px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px; position:relative; z-index:3;">
-                        <option value="texto">Texto</option>
-                        <option value="selector">Selector</option>
-                        <option value="si_no">Sí / No</option>
-                        <option value="numero">Número</option>
-                        <option value="moneda">Moneda</option>
-                        <option value="fecha">Fecha</option>
-                    </select>
+                    <input id="tesauroQuickType" type="hidden" value="texto">
+                    <div id="tesauroQuickTypeButtons" style="display:flex; flex-wrap:wrap; gap:6px;">
+                        <button type="button" class="tesauro-quick-type-btn" data-value="texto" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:#eef2ff; color:#1e3a8a; font-size:12px; cursor:pointer; font-weight:600;">Texto</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="selector" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Selector</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="si_no" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Sí / No</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="numero" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Número</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="moneda" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Moneda</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="fecha" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Fecha</button>
+                    </div>
                 </label>
 
                 <div id="tesauroQuickSelectorOptionsWrap" style="
@@ -715,7 +715,7 @@ const DataTesauro = {
         this.quickCreateNameInput = overlay.querySelector("#tesauroQuickName");
         this.quickCreateRefInput = overlay.querySelector("#tesauroQuickRef");
         this.quickCreateRefSelect = overlay.querySelector("#tesauroQuickRefSelect");
-        this.quickCreateTypeSelect = overlay.querySelector("#tesauroQuickType");
+        this.quickCreateTypeInput = overlay.querySelector("#tesauroQuickType");
         this.quickCreateSelectorOptionsWrap = overlay.querySelector("#tesauroQuickSelectorOptionsWrap");
         this.quickCreateSelectorOptionsBody = overlay.querySelector("#tesauroQuickSelectorOptionsBody");
         this.quickCreateRefFeedback = overlay.querySelector("#tesauroQuickRefFeedback");
@@ -749,11 +749,12 @@ const DataTesauro = {
             });
         }
 
-        if (this.quickCreateTypeSelect) {
-            this.quickCreateTypeSelect.addEventListener("change", () => {
-                this.toggleQuickSelectorOptions();
+        overlay.querySelectorAll(".tesauro-quick-type-btn").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const value = btn.dataset.value || "texto";
+                this.setQuickCreateType(value);
             });
-        }
+        });
 
         if (btnAddOption) {
             btnAddOption.addEventListener("click", () => {
@@ -793,8 +794,30 @@ const DataTesauro = {
 
     toggleQuickSelectorOptions() {
         if (!this.quickCreateSelectorOptionsWrap) return;
-        const isSelector = (this.quickCreateTypeSelect?.value || "texto") === "selector";
+        const isSelector = this.getQuickCreateType() === "selector";
         this.quickCreateSelectorOptionsWrap.style.display = isSelector ? "flex" : "none";
+    },
+
+    setQuickCreateType(value) {
+        const allowed = new Set(["texto", "selector", "si_no", "numero", "moneda", "fecha"]);
+        const safeValue = allowed.has(value) ? value : "texto";
+        if (this.quickCreateTypeInput) {
+            this.quickCreateTypeInput.value = safeValue;
+        }
+        if (this.quickCreateModal) {
+            this.quickCreateModal.querySelectorAll(".tesauro-quick-type-btn").forEach((btn) => {
+                const isActive = btn.dataset.value === safeValue;
+                btn.style.background = isActive ? "#eef2ff" : "white";
+                btn.style.color = isActive ? "#1e3a8a" : "#334155";
+                btn.style.fontWeight = isActive ? "700" : "500";
+                btn.style.borderColor = isActive ? "#6366f1" : "#cbd5e1";
+            });
+        }
+        this.toggleQuickSelectorOptions();
+    },
+
+    getQuickCreateType() {
+        return this.quickCreateTypeInput?.value || "texto";
     },
 
     resetQuickSelectorOptions() {
@@ -844,11 +867,11 @@ const DataTesauro = {
     },
 
     handleQuickCreate() {
-        if (!this.quickCreateNameInput || !this.quickCreateRefInput || !this.quickCreateTypeSelect) return;
+        if (!this.quickCreateNameInput || !this.quickCreateRefInput || !this.quickCreateTypeInput) return;
 
         const nombre = (this.quickCreateNameInput.value || "").trim();
         let ref = (this.quickCreateRefInput.value || "").trim();
-        const tipo = this.quickCreateTypeSelect.value || "texto";
+        const tipo = this.getQuickCreateType();
         const crearRef = (this.quickCreateRefSelect?.value || "no") === "si";
 
         if (!nombre) {
