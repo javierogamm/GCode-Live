@@ -1,5 +1,14 @@
 # Log de cambios
 
+## v1.3.83 - 2026-03-27
+- Se reforzó la validación de referencias de tesauros para que no acepten espacios ni caracteres especiales, manteniendo límite máximo de 40 caracteres en creación rápida, gestor y edición de opciones de selectores.
+- Se aplicó límite de 40 caracteres a la agrupación de tesauros (edición individual y masiva en el gestor), normalizando el valor al guardar.
+- Al crear tesauros desde el editor con tipo **Selector**, el modal rápido ahora muestra un bloque para informar referencias y valores de sus opciones antes de insertar.
+- En el gestor de tesauros se añadió el botón **🧱 Crear "N" tesauros**, que solicita cantidad, referencia base y nombre base para generar lotes numerados (`Referencia1 - Nombre 1`, etc.).
+- Se amplió el ancho del modal principal del gestor para aprovechar más espacio horizontal en pantalla.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.83` y la versión del proyecto en `package.json` a `1.3.83`.
+
 ## v1.3.82 - 2026-03-20
 - Se añadió el botón rápido **🧠 Insertar Function** justo a la derecha de **📚 Insertar Tesauro** en la fila superior de acciones del editor.
 - El nuevo selector muestra las functions agrupadas por bloque (**FECHA**, **EXPEDIENTE** e **INICIACIÓN**), enseñando solo el nombre funcional en el desplegable.

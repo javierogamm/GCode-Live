@@ -33,6 +33,8 @@ const DataTesauro = {
     quickCreateRefInput: null,
     quickCreateRefSelect: null,
     quickCreateTypeSelect: null,
+    quickCreateSelectorOptionsWrap: null,
+    quickCreateSelectorOptionsBody: null,
     quickRefEdited: false,
 
     // Selector rápido de functions
@@ -598,6 +600,8 @@ const DataTesauro = {
         if (this.quickCreateRefInput) this.quickCreateRefInput.value = "";
         if (this.quickCreateRefSelect) this.quickCreateRefSelect.value = "no";
         if (this.quickCreateTypeSelect) this.quickCreateTypeSelect.value = "texto";
+        this.resetQuickSelectorOptions();
+        this.toggleQuickSelectorOptions();
 
         this.updateQuickRefPreview();
 
@@ -641,7 +645,7 @@ const DataTesauro = {
                 <label style="display:flex; flex-direction:column; gap:4px;">
                     <span style="font-size:12px; color:#6b7280;">Referencia</span>
                     <input id="tesauroQuickRef" type="text" placeholder="Referencia" style="
-                        width:100%; padding:7px 8px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px;">
+                        width:100%; padding:7px 8px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px;" maxlength="40">
                 </label>
 
                 <label style="display:flex; flex-direction:column; gap:4px;">
@@ -666,6 +670,30 @@ const DataTesauro = {
                     </select>
                 </label>
 
+                <div id="tesauroQuickSelectorOptionsWrap" style="
+                    display:none;
+                    border:1px solid #e2e8f0;
+                    border-radius:8px;
+                    padding:10px;
+                    background:#f8fafc;
+                    gap:8px;
+                    flex-direction:column;">
+                    <div style="font-size:12px; color:#334155; font-weight:600;">Opciones del selector</div>
+                    <div style="font-size:12px; color:#64748b;">Informa la referencia y valor de cada opción.</div>
+                    <div id="tesauroQuickSelectorOptionsBody" style="display:flex; flex-direction:column; gap:6px;"></div>
+                    <button id="tesauroQuickAddOption" type="button" style="
+                        align-self:flex-start;
+                        padding:5px 10px;
+                        border-radius:6px;
+                        border:1px solid #10b981;
+                        background:#d1fae5;
+                        color:#065f46;
+                        cursor:pointer;
+                        font-weight:600;">
+                        ➕ Añadir opción
+                    </button>
+                </div>
+
                 <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:4px;">
                     <button id="tesauroQuickCancel" type="button" style="
                         padding:7px 12px; border-radius:8px; border:1px solid #e5e7eb; background:#f3f4f6; cursor:pointer;">
@@ -685,9 +713,12 @@ const DataTesauro = {
         this.quickCreateRefInput = overlay.querySelector("#tesauroQuickRef");
         this.quickCreateRefSelect = overlay.querySelector("#tesauroQuickRefSelect");
         this.quickCreateTypeSelect = overlay.querySelector("#tesauroQuickType");
+        this.quickCreateSelectorOptionsWrap = overlay.querySelector("#tesauroQuickSelectorOptionsWrap");
+        this.quickCreateSelectorOptionsBody = overlay.querySelector("#tesauroQuickSelectorOptionsBody");
 
         const btnCancel = overlay.querySelector("#tesauroQuickCancel");
         const btnCreate = overlay.querySelector("#tesauroQuickCreateBtn");
+        const btnAddOption = overlay.querySelector("#tesauroQuickAddOption");
 
         if (this.quickCreateNameInput) {
             this.quickCreateNameInput.addEventListener("input", () => {
@@ -697,6 +728,10 @@ const DataTesauro = {
 
         if (this.quickCreateRefInput) {
             this.quickCreateRefInput.addEventListener("input", () => {
+                const limited = this.limitReferenceLength(this.quickCreateRefInput.value);
+                if (this.quickCreateRefInput.value !== limited) {
+                    this.quickCreateRefInput.value = limited;
+                }
                 this.quickRefEdited = true;
             });
         }
@@ -705,6 +740,18 @@ const DataTesauro = {
             this.quickCreateRefSelect.addEventListener("change", () => {
                 this.quickRefEdited = false;
                 this.updateQuickRefPreview();
+            });
+        }
+
+        if (this.quickCreateTypeSelect) {
+            this.quickCreateTypeSelect.addEventListener("change", () => {
+                this.toggleQuickSelectorOptions();
+            });
+        }
+
+        if (btnAddOption) {
+            btnAddOption.addEventListener("click", () => {
+                this.addQuickSelectorOptionRow();
             });
         }
 
@@ -720,6 +767,9 @@ const DataTesauro = {
             if (!this.quickCreateModal || this.quickCreateModal.style.display !== "flex") return;
             if (e.key === "Escape") this.closeQuickCreateModal();
         });
+
+        this.resetQuickSelectorOptions();
+        this.toggleQuickSelectorOptions();
     },
 
     updateQuickRefPreview() {
@@ -732,6 +782,50 @@ const DataTesauro = {
         const suggestion = this.generarReferenciaDesdeNombre(this.quickCreateNameInput.value);
         this.quickCreateRefInput.value = this.limitReferenceLength(suggestion);
         this.quickRefEdited = false;
+    },
+
+    toggleQuickSelectorOptions() {
+        if (!this.quickCreateSelectorOptionsWrap) return;
+        const isSelector = (this.quickCreateTypeSelect?.value || "texto") === "selector";
+        this.quickCreateSelectorOptionsWrap.style.display = isSelector ? "flex" : "none";
+    },
+
+    resetQuickSelectorOptions() {
+        if (!this.quickCreateSelectorOptionsBody) return;
+        this.quickCreateSelectorOptionsBody.innerHTML = "";
+        this.addQuickSelectorOptionRow();
+    },
+
+    addQuickSelectorOptionRow(ref = "", valor = "") {
+        if (!this.quickCreateSelectorOptionsBody) return;
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.gap = "6px";
+        row.style.alignItems = "center";
+        row.className = "tesauro-quick-option-row";
+        row.innerHTML = `
+            <input class="tesauro-quick-opt-ref" type="text" placeholder="Referencia opción" value="${this.escapeAttr(this.limitReferenceLength(ref))}" maxlength="40" style="flex:0.8; padding:6px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+            <input class="tesauro-quick-opt-valor" type="text" placeholder="Valor opción" value="${this.escapeAttr(valor)}" style="flex:1; padding:6px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+            <button type="button" class="tesauro-quick-opt-del" style="padding:5px 8px; border-radius:6px; border:1px solid #fecaca; background:#fee2e2; color:#991b1b; cursor:pointer;">✖</button>
+        `;
+
+        const refInput = row.querySelector(".tesauro-quick-opt-ref");
+        if (refInput) {
+            refInput.addEventListener("input", () => {
+                refInput.value = this.limitReferenceLength(refInput.value);
+            });
+        }
+
+        const delBtn = row.querySelector(".tesauro-quick-opt-del");
+        if (delBtn) {
+            delBtn.addEventListener("click", () => {
+                row.remove();
+                if (!this.quickCreateSelectorOptionsBody.children.length) {
+                    this.addQuickSelectorOptionRow();
+                }
+            });
+        }
+        this.quickCreateSelectorOptionsBody.appendChild(row);
     },
 
     closeQuickCreateModal() {
@@ -782,7 +876,28 @@ const DataTesauro = {
         };
 
         if (tipo === "selector") {
-            nuevo.opciones = [];
+            const opciones = Array.from(this.quickCreateSelectorOptionsBody?.querySelectorAll(".tesauro-quick-option-row") || [])
+                .map((row) => {
+                    const refEl = row.querySelector(".tesauro-quick-opt-ref");
+                    const valorEl = row.querySelector(".tesauro-quick-opt-valor");
+                    const refOpt = this.limitReferenceLength((refEl?.value || "").trim());
+                    const valorOpt = (valorEl?.value || "").trim();
+                    if (!refOpt && !valorOpt) return null;
+                    if (!refOpt || !valorOpt) return "__invalid__";
+                    return {
+                        id: this.generateId(),
+                        ref: refOpt,
+                        valor: valorOpt
+                    };
+                })
+                .filter(Boolean);
+
+            if (opciones.includes("__invalid__")) {
+                alert("Cada opción de selector debe incluir referencia y valor.");
+                return;
+            }
+
+            nuevo.opciones = opciones;
         }
 
         this.campos = this.campos || [];
@@ -879,8 +994,10 @@ const DataTesauro = {
     limitReferenceLength(ref, max = 40) {
         if (!ref) return "";
         const normalized = String(ref).trim();
-        if (normalized.length <= max) return normalized;
-        return normalized.slice(0, max);
+        const withoutSpaces = normalized.replace(/\s+/g, "");
+        const safe = withoutSpaces.replace(/[^A-Za-z0-9_]/g, "");
+        if (safe.length <= max) return safe;
+        return safe.slice(0, max);
     },
 // ⭐ NUEVO: generador de referencias con inversión + SiNo siempre al final
 generarReferenciaDesdeNombre(nombre) {
