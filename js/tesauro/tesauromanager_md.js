@@ -18,6 +18,7 @@ const TesauroManager = {
     btnClose: null,
     btnSave: null,
     btnOpenRefPopup: null,
+    btnBulkCreate: null,
     btnOpenPlainImport: null,   // botón importar texto
     btnOpenMdImport: null,      // *** NUEVO: botón importar desde markdown
     btnOpenCsvImport: null,
@@ -40,6 +41,8 @@ const TesauroManager = {
     // Modal crear tesauro individual
     createModal: null,
     createRefEdited: false,
+    createRefFeedback: null,
+    lastReferenceWarningAt: 0,
 
     // Import / export
     pasteArea: null,
@@ -80,9 +83,9 @@ const TesauroManager = {
 
     
         background:white;
-        width:min(96vw, calc(90vw * 1.3));
+        width:min(98vw, 2340px);
         height:min(98vh, calc(85vh * 1.15));
-        max-width:1800px;
+        max-width:2340px;
         max-height:1200px;
         border-radius:12px;
         padding:20px;
@@ -256,6 +259,17 @@ const TesauroManager = {
                 font-weight:bold;
             ">➕ Crear tesauro</button>
 
+            <button id="tmBulkCreateTesauro" style="
+                flex:1;
+                background:#ede9fe;
+                border:1px solid #8b5cf6;
+                color:#4c1d95;
+                padding:10px;
+                border-radius:6px;
+                cursor:pointer;
+                font-weight:bold;
+            ">🧱 Crear "N" tesauros</button>
+
             <button id="tmSave" style="
                 flex:1;
                 background:#10b981;
@@ -310,6 +324,7 @@ const TesauroManager = {
             <!-- Agrupación -->
             <input id="tmMassAgr"
                 placeholder="Agrupación…"
+                maxlength="40"
                 style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:180px;">
 
             <button id="tmMassApply" style="
@@ -416,6 +431,7 @@ const TesauroManager = {
                     width:100%; padding:6px; border-radius:6px; border:1px solid #cbd5e1;
                     font-size:13px;
                 " placeholder="Referencia" maxlength="40">
+                <span id="tmCreateRefFeedback" style="display:none; font-size:11px; color:#b45309;"></span>
 
                 <label style="font-size:13px; color:#111827;">Crear referencia</label>
                 <select id="tmCreateRef" style="
@@ -452,8 +468,10 @@ const TesauroManager = {
         this.btnOpenPlainImport = div.querySelector("#tmOpenPlainImport");
         this.btnOpenCsvImport = div.querySelector("#tmOpenCsvImport");
         this.btnOpenMdImport = div.querySelector("#tmOpenMdImport");  // *** NUEVO
+        this.btnBulkCreate = div.querySelector("#tmBulkCreateTesauro");
         this.exportModal = div.querySelector("#tmExportModal");
         this.createModal = div.querySelector("#tmCreateModal");
+        this.createRefFeedback = div.querySelector("#tmCreateRefFeedback");
         this.btnUndo = div.querySelector("#tmUndo");
         this.btnRedo = div.querySelector("#tmRedo");
 
@@ -475,6 +493,9 @@ const TesauroManager = {
         const btnNewTesauro = div.querySelector("#tmNewTesauro");
         if (btnNewTesauro) {
             btnNewTesauro.addEventListener("click", () => this.openCreateTesauroModal());
+        }
+        if (this.btnBulkCreate) {
+            this.btnBulkCreate.addEventListener("click", () => this.bulkCreateTesauros());
         }
 
         // Abrir popup de importación desde texto
@@ -547,10 +568,12 @@ const TesauroManager = {
 
             if (createRefInput) {
                 createRefInput.addEventListener("input", () => {
-                    const limited = this.limitReferenceLength(createRefInput.value);
+                    const details = this.sanitizeReferenceWithDetails(createRefInput.value);
+                    const limited = details.value;
                     if (createRefInput.value !== limited) {
                         createRefInput.value = limited;
                     }
+                    this.updateReferenceFeedback(this.createRefFeedback, details);
                     this.createRefEdited = true;
                 });
             }
@@ -2997,6 +3020,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
 
                         <input class="tm-opt-ref" type="text" value="${safeRef}"
                             placeholder="Ref"
+                            maxlength="40"
                             style="flex:0.6; padding:4px; border:1px solid #cbd5e1; border-radius:4px;">
 
                         <input class="tm-opt-valor" type="text" value="${safeVal}"
@@ -3022,6 +3046,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                     <div style="display:flex; gap:6px; margin-top:4px;">
                         <input class="tm-new-opt-ref" type="text"
                             placeholder="Ref"
+                            maxlength="40"
                             style="flex:0.6; padding:4px; border:1px solid #cbd5e1; border-radius:4px;">
 
                         <input class="tm-new-opt-valor" type="text"
@@ -3064,6 +3089,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
             tdAgr.innerHTML = `
             <input type="text" data-field="agrupacion" data-id="${c.id}"
                 value="${c.agrupacion || "Agrupación"}"
+                maxlength="40"
                 class="tmAgrInput"
                 style="width:100%; padding:4px; border:1px solid #cbd5e1; border-radius:4px;">
         `;
@@ -3123,10 +3149,12 @@ row.appendChild(tdDel);
             });
             el.addEventListener("input", () => {
                 if (el.dataset.field === "ref") {
-                    const limited = this.limitReferenceLength(el.innerText);
+                    const details = this.sanitizeReferenceWithDetails(el.innerText);
+                    const limited = details.value;
                     if (el.innerText !== limited) {
                         el.innerText = limited;
                     }
+                    this.notifyInvalidReferenceAttempt(details);
                 }
             });
             el.addEventListener("blur", () => {
@@ -3215,9 +3243,13 @@ row.appendChild(tdDel);
                 startValue = inp.value.trim();
             });
             inp.addEventListener("input", () => {
+                const limited = this.limitGroupingLength(inp.value);
+                if (inp.value !== limited) {
+                    inp.value = limited;
+                }
                 const id = inp.dataset.id;
                 const item = DataTesauro.campos.find(x => x.id === id);
-                if (item) item.agrupacion = inp.value.trim();
+                if (item) item.agrupacion = limited;
             });
             inp.addEventListener("blur", () => {
                 if (inp.value.trim() === startValue) return;
@@ -3320,13 +3352,18 @@ row.appendChild(tdDel);
         const massSelect = this.modal.querySelector("#tmMassTipo");
         const massMomento = this.modal.querySelector("#tmMassMomento");
         const massAgr = this.modal.querySelector("#tmMassAgr");
+        if (massAgr) {
+            massAgr.addEventListener("input", () => {
+                massAgr.value = this.limitGroupingLength(massAgr.value);
+            });
+        }
 
         if (massApply) {
             massApply.onclick = () => {
 
                 const tipo = massSelect ? massSelect.value : "";
                 const momento = massMomento ? massMomento.value : "";
-                const agrupacion = massAgr ? massAgr.value.trim() : "";
+                const agrupacion = massAgr ? this.limitGroupingLength(massAgr.value) : "";
 
                 if (!tipo && !momento && !agrupacion) {
                     alert("Selecciona al menos un valor para aplicar.");
@@ -3390,11 +3427,17 @@ row.appendChild(tdDel);
 
                 const refInput = box.querySelector(".tm-new-opt-ref");
                 const valInput = box.querySelector(".tm-new-opt-valor");
-                const ref = (refInput?.value || "").trim();
+                const details = this.sanitizeReferenceWithDetails((refInput?.value || "").trim());
+                const ref = details.value;
                 const valor = (valInput?.value || "").trim();
 
                 // Si no hay nada, no hacemos nada
                 if (!ref && !valor) return;
+                if (!ref) {
+                    alert("La referencia de la opción no puede estar vacía.");
+                    return;
+                }
+                this.notifyInvalidReferenceAttempt(details);
 
                 if (!Array.isArray(item.opciones)) item.opciones = [];
 
@@ -3443,6 +3486,9 @@ row.appendChild(tdDel);
                 startValue = inp.value.trim();
             });
             inp.addEventListener("input", () => {
+                const details = this.sanitizeReferenceWithDetails(inp.value);
+                inp.value = details.value;
+                this.notifyInvalidReferenceAttempt(details);
                 const optRow = inp.closest(".tm-opt-row");
                 const box = inp.closest(".tm-opt-box");
                 if (!optRow || !box) return;
@@ -3456,7 +3502,7 @@ row.appendChild(tdDel);
                 const opt = item.opciones.find(o => o.id === idOpcion);
                 if (!opt) return;
 
-                opt.ref = inp.value.trim();
+                opt.ref = this.limitReferenceLength(inp.value.trim());
             });
             inp.addEventListener("blur", () => {
                 if (inp.value.trim() === startValue) return;
@@ -3583,6 +3629,10 @@ row.appendChild(tdDel);
         });
 
         // Momento y agrupación ya se actualizan con los listeners
+        lista.forEach((item) => {
+            item.ref = this.limitReferenceLength(item.ref || "");
+            item.agrupacion = this.limitGroupingLength(item.agrupacion || "");
+        });
 
         // 4) Refrescar panel lateral del tesauro en el editor Markdown
         if (typeof DataTesauro.renderList === "function") {
@@ -3746,10 +3796,46 @@ row.appendChild(tdDel);
     },
 
     limitReferenceLength(ref) {
+        return this.sanitizeReferenceWithDetails(ref).value;
+    },
+    sanitizeReferenceWithDetails(ref) {
         if (window.DataTesauro && typeof DataTesauro.limitReferenceLength === "function") {
-            return DataTesauro.limitReferenceLength(ref);
+            const original = (ref || "").toString().trim();
+            const value = DataTesauro.limitReferenceLength(ref);
+            return {
+                value,
+                trimmedByRule: original !== value,
+                original
+            };
         }
-        return (ref || "").toString().trim().slice(0, 40);
+        const original = (ref || "").toString().trim();
+        const value = original.replace(/\s+/g, "").replace(/[^A-Za-z0-9_]/g, "").slice(0, 40);
+        return {
+            value,
+            trimmedByRule: original !== value,
+            original
+        };
+    },
+    updateReferenceFeedback(feedbackEl, details) {
+        if (!feedbackEl) return;
+        if (!details?.trimmedByRule) {
+            feedbackEl.style.display = "none";
+            feedbackEl.textContent = "";
+            return;
+        }
+        feedbackEl.style.display = "block";
+        feedbackEl.textContent = `Referencia corregida: "${details.original}" no cumple las reglas (solo A-Z, 0-9 y _; máx. 40).`;
+        this.notifyInvalidReferenceAttempt(details);
+    },
+    notifyInvalidReferenceAttempt(details) {
+        if (!details?.trimmedByRule) return;
+        const now = Date.now();
+        if (now - this.lastReferenceWarningAt < 1200) return;
+        this.lastReferenceWarningAt = now;
+        console.warn(`Referencia no permitida detectada: ${details.original}`);
+    },
+    limitGroupingLength(text) {
+        return (text || "").toString().trim().slice(0, 40);
     },
     escapeAttr(value) {
         if (window.DataTesauro && typeof DataTesauro.escapeAttr === "function") {
@@ -3820,6 +3906,7 @@ row.appendChild(tdDel);
 
         const refFinal = this.getUniqueReference(suggestion);
         inRefInput.value = refFinal;
+        this.updateReferenceFeedback(this.createRefFeedback, this.sanitizeReferenceWithDetails(inRefInput.value));
         this.createRefEdited = false;
     },
 
@@ -3898,6 +3985,10 @@ row.appendChild(tdDel);
         if (inNombre) inNombre.value = "";
         if (inRefInput) inRefInput.value = "";
         if (inRef) inRef.value = "no";
+        if (this.createRefFeedback) {
+            this.createRefFeedback.style.display = "none";
+            this.createRefFeedback.textContent = "";
+        }
         this.updateCreateRefPreview();
         this.createModal.style.display = "flex";
         if (inNombre) inNombre.focus();
@@ -3905,6 +3996,54 @@ row.appendChild(tdDel);
 
     closeCreateTesauroModal() {
         if (this.createModal) this.createModal.style.display = "none";
+    },
+
+    bulkCreateTesauros() {
+        if (!window.DataTesauro) return;
+
+        const cantidadRaw = prompt("¿Cuántos tesauros quieres crear?");
+        if (cantidadRaw === null) return;
+        const cantidad = parseInt(cantidadRaw, 10);
+        if (!Number.isInteger(cantidad) || cantidad <= 0) {
+            alert("Indica un número válido mayor que 0.");
+            return;
+        }
+
+        const refBaseRaw = prompt("Referencia base (sin espacios ni caracteres especiales):");
+        if (refBaseRaw === null) return;
+        const refBase = this.limitReferenceLength(refBaseRaw);
+        if (!refBase) {
+            alert("La referencia base no es válida.");
+            return;
+        }
+
+        const nombreBaseRaw = prompt("Nombre base del tesauro:");
+        if (nombreBaseRaw === null) return;
+        const nombreBase = (nombreBaseRaw || "").trim();
+        if (!nombreBase) {
+            alert("Debes indicar un nombre base.");
+            return;
+        }
+
+        let creados = 0;
+        for (let i = 1; i <= cantidad; i += 1) {
+            const refNumerada = this.limitReferenceLength(`${refBase}${i}`);
+            const refFinal = this.getUniqueReference(refNumerada);
+            const nombreFinal = `${nombreBase} ${i}`.trim();
+            this.createTesauroFromManager(nombreFinal, refFinal, false);
+            creados += 1;
+        }
+
+        if (creados > 0) {
+            if (typeof DataTesauro.renderList === "function") {
+                DataTesauro.renderList();
+            } else if (typeof DataTesauro.render === "function") {
+                DataTesauro.render();
+            }
+            this.render();
+            this.recordHistory();
+            alert(`✅ Se han creado ${creados} tesauros.`);
+        }
     },
 
     doExportTesauro(entidad, actividad) {
@@ -4090,7 +4229,7 @@ row.appendChild(tdDel);
     /* ---------------------------------------------
        Crear un tesauro nuevo desde el manager
     --------------------------------------------- */
-    createTesauroFromManager(nombre, refFinal) {
+    createTesauroFromManager(nombre, refFinal, shouldRefresh = true) {
         if (!window.DataTesauro) {
             alert("DataTesauro no está disponible.");
             return;
@@ -4116,15 +4255,17 @@ row.appendChild(tdDel);
         lista.push(nuevo);
         DataTesauro.campos = lista;
 
-        // Refrescar panel lateral y tabla del manager
-        if (typeof DataTesauro.renderList === "function") {
-            DataTesauro.renderList();
-        } else if (typeof DataTesauro.render === "function") {
-            DataTesauro.render();
-        }
+        if (shouldRefresh) {
+            // Refrescar panel lateral y tabla del manager
+            if (typeof DataTesauro.renderList === "function") {
+                DataTesauro.renderList();
+            } else if (typeof DataTesauro.render === "function") {
+                DataTesauro.render();
+            }
 
-        this.render();
-        this.recordHistory();
+            this.render();
+            this.recordHistory();
+        }
     }
 };
 

@@ -1,5 +1,28 @@
 # Log de cambios
 
+## v1.3.85 - 2026-03-27
+- Se corrigió definitivamente el problema visual del selector de **Tipo** en el modal rápido de creación: se sustituyó el desplegable nativo por un selector de botones en línea para evitar el popup descolocado.
+- El nuevo selector de tipo mantiene los mismos valores funcionales (`texto`, `selector`, `si_no`, `numero`, `moneda`, `fecha`) y sigue activando el bloque de opciones cuando se elige `selector`.
+- Se mantuvo el feedback visible de referencias corregidas por reglas de validación.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.85` y la versión del proyecto en `package.json` a `1.3.85`.
+
+## v1.3.84 - 2026-03-27
+- Se corrigió la regresión visual del modal rápido de creación de tesauros para que el desplegable **Tipo** vuelva a mostrarse correctamente alineado dentro del modal.
+- Al introducir referencias con caracteres no permitidos, ahora se muestra un mensaje explícito de corrección con el valor intentado, de forma visible para el usuario tanto en el modal rápido como en el modal de creación del gestor.
+- Se mantuvo la normalización de referencias (sin espacios, sin caracteres especiales y máximo 40) con trazabilidad visible de la corrección aplicada.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.84` y la versión del proyecto en `package.json` a `1.3.84`.
+
+## v1.3.83 - 2026-03-27
+- Se reforzó la validación de referencias de tesauros para que no acepten espacios ni caracteres especiales, manteniendo límite máximo de 40 caracteres en creación rápida, gestor y edición de opciones de selectores.
+- Se aplicó límite de 40 caracteres a la agrupación de tesauros (edición individual y masiva en el gestor), normalizando el valor al guardar.
+- Al crear tesauros desde el editor con tipo **Selector**, el modal rápido ahora muestra un bloque para informar referencias y valores de sus opciones antes de insertar.
+- En el gestor de tesauros se añadió el botón **🧱 Crear "N" tesauros**, que solicita cantidad, referencia base y nombre base para generar lotes numerados (`Referencia1 - Nombre 1`, etc.).
+- Se amplió el ancho del modal principal del gestor para aprovechar más espacio horizontal en pantalla.
+- Se documentó esta consolidación en el log de cambios.
+- Se actualizó la versión visible de la app a `v1.3.83` y la versión del proyecto en `package.json` a `1.3.83`.
+
 ## v1.3.82 - 2026-03-20
 - Se añadió el botón rápido **🧠 Insertar Function** justo a la derecha de **📚 Insertar Tesauro** en la fila superior de acciones del editor.
 - El nuevo selector muestra las functions agrupadas por bloque (**FECHA**, **EXPEDIENTE** e **INICIACIÓN**), enseñando solo el nombre funcional en el desplegable.

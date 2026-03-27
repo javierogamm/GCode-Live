@@ -32,8 +32,12 @@ const DataTesauro = {
     quickCreateNameInput: null,
     quickCreateRefInput: null,
     quickCreateRefSelect: null,
-    quickCreateTypeSelect: null,
+    quickCreateTypeInput: null,
+    quickCreateSelectorOptionsWrap: null,
+    quickCreateSelectorOptionsBody: null,
+    quickCreateRefFeedback: null,
     quickRefEdited: false,
+    lastReferenceWarningAt: 0,
 
     // Selector rápido de functions
     functionModal: null,
@@ -597,7 +601,9 @@ const DataTesauro = {
         if (this.quickCreateNameInput) this.quickCreateNameInput.value = "";
         if (this.quickCreateRefInput) this.quickCreateRefInput.value = "";
         if (this.quickCreateRefSelect) this.quickCreateRefSelect.value = "no";
-        if (this.quickCreateTypeSelect) this.quickCreateTypeSelect.value = "texto";
+        this.setQuickCreateType("texto");
+        this.resetQuickSelectorOptions();
+        this.toggleQuickSelectorOptions();
 
         this.updateQuickRefPreview();
 
@@ -641,7 +647,8 @@ const DataTesauro = {
                 <label style="display:flex; flex-direction:column; gap:4px;">
                     <span style="font-size:12px; color:#6b7280;">Referencia</span>
                     <input id="tesauroQuickRef" type="text" placeholder="Referencia" style="
-                        width:100%; padding:7px 8px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px;">
+                        width:100%; padding:7px 8px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px;" maxlength="40">
+                    <span id="tesauroQuickRefFeedback" style="display:none; font-size:11px; color:#b45309;"></span>
                 </label>
 
                 <label style="display:flex; flex-direction:column; gap:4px;">
@@ -655,16 +662,40 @@ const DataTesauro = {
 
                 <label style="display:flex; flex-direction:column; gap:4px;">
                     <span style="font-size:12px; color:#6b7280;">Tipo</span>
-                    <select id="tesauroQuickType" style="
-                        width:100%; padding:7px 8px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px;">
-                        <option value="texto">Texto</option>
-                        <option value="selector">Selector</option>
-                        <option value="si_no">Sí / No</option>
-                        <option value="numero">Número</option>
-                        <option value="moneda">Moneda</option>
-                        <option value="fecha">Fecha</option>
-                    </select>
+                    <input id="tesauroQuickType" type="hidden" value="texto">
+                    <div id="tesauroQuickTypeButtons" style="display:flex; flex-wrap:wrap; gap:6px;">
+                        <button type="button" class="tesauro-quick-type-btn" data-value="texto" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:#eef2ff; color:#1e3a8a; font-size:12px; cursor:pointer; font-weight:600;">Texto</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="selector" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Selector</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="si_no" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Sí / No</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="numero" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Número</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="moneda" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Moneda</button>
+                        <button type="button" class="tesauro-quick-type-btn" data-value="fecha" style="padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:white; color:#334155; font-size:12px; cursor:pointer;">Fecha</button>
+                    </div>
                 </label>
+
+                <div id="tesauroQuickSelectorOptionsWrap" style="
+                    display:none;
+                    border:1px solid #e2e8f0;
+                    border-radius:8px;
+                    padding:10px;
+                    background:#f8fafc;
+                    gap:8px;
+                    flex-direction:column;">
+                    <div style="font-size:12px; color:#334155; font-weight:600;">Opciones del selector</div>
+                    <div style="font-size:12px; color:#64748b;">Informa la referencia y valor de cada opción.</div>
+                    <div id="tesauroQuickSelectorOptionsBody" style="display:flex; flex-direction:column; gap:6px;"></div>
+                    <button id="tesauroQuickAddOption" type="button" style="
+                        align-self:flex-start;
+                        padding:5px 10px;
+                        border-radius:6px;
+                        border:1px solid #10b981;
+                        background:#d1fae5;
+                        color:#065f46;
+                        cursor:pointer;
+                        font-weight:600;">
+                        ➕ Añadir opción
+                    </button>
+                </div>
 
                 <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:4px;">
                     <button id="tesauroQuickCancel" type="button" style="
@@ -684,10 +715,14 @@ const DataTesauro = {
         this.quickCreateNameInput = overlay.querySelector("#tesauroQuickName");
         this.quickCreateRefInput = overlay.querySelector("#tesauroQuickRef");
         this.quickCreateRefSelect = overlay.querySelector("#tesauroQuickRefSelect");
-        this.quickCreateTypeSelect = overlay.querySelector("#tesauroQuickType");
+        this.quickCreateTypeInput = overlay.querySelector("#tesauroQuickType");
+        this.quickCreateSelectorOptionsWrap = overlay.querySelector("#tesauroQuickSelectorOptionsWrap");
+        this.quickCreateSelectorOptionsBody = overlay.querySelector("#tesauroQuickSelectorOptionsBody");
+        this.quickCreateRefFeedback = overlay.querySelector("#tesauroQuickRefFeedback");
 
         const btnCancel = overlay.querySelector("#tesauroQuickCancel");
         const btnCreate = overlay.querySelector("#tesauroQuickCreateBtn");
+        const btnAddOption = overlay.querySelector("#tesauroQuickAddOption");
 
         if (this.quickCreateNameInput) {
             this.quickCreateNameInput.addEventListener("input", () => {
@@ -697,6 +732,12 @@ const DataTesauro = {
 
         if (this.quickCreateRefInput) {
             this.quickCreateRefInput.addEventListener("input", () => {
+                const details = this.sanitizeReferenceWithDetails(this.quickCreateRefInput.value);
+                const limited = details.value;
+                if (this.quickCreateRefInput.value !== limited) {
+                    this.quickCreateRefInput.value = limited;
+                }
+                this.updateReferenceFeedback(this.quickCreateRefFeedback, details);
                 this.quickRefEdited = true;
             });
         }
@@ -705,6 +746,19 @@ const DataTesauro = {
             this.quickCreateRefSelect.addEventListener("change", () => {
                 this.quickRefEdited = false;
                 this.updateQuickRefPreview();
+            });
+        }
+
+        overlay.querySelectorAll(".tesauro-quick-type-btn").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const value = btn.dataset.value || "texto";
+                this.setQuickCreateType(value);
+            });
+        });
+
+        if (btnAddOption) {
+            btnAddOption.addEventListener("click", () => {
+                this.addQuickSelectorOptionRow();
             });
         }
 
@@ -720,6 +774,9 @@ const DataTesauro = {
             if (!this.quickCreateModal || this.quickCreateModal.style.display !== "flex") return;
             if (e.key === "Escape") this.closeQuickCreateModal();
         });
+
+        this.resetQuickSelectorOptions();
+        this.toggleQuickSelectorOptions();
     },
 
     updateQuickRefPreview() {
@@ -731,7 +788,76 @@ const DataTesauro = {
 
         const suggestion = this.generarReferenciaDesdeNombre(this.quickCreateNameInput.value);
         this.quickCreateRefInput.value = this.limitReferenceLength(suggestion);
+        this.updateReferenceFeedback(this.quickCreateRefFeedback, this.sanitizeReferenceWithDetails(this.quickCreateRefInput.value));
         this.quickRefEdited = false;
+    },
+
+    toggleQuickSelectorOptions() {
+        if (!this.quickCreateSelectorOptionsWrap) return;
+        const isSelector = this.getQuickCreateType() === "selector";
+        this.quickCreateSelectorOptionsWrap.style.display = isSelector ? "flex" : "none";
+    },
+
+    setQuickCreateType(value) {
+        const allowed = new Set(["texto", "selector", "si_no", "numero", "moneda", "fecha"]);
+        const safeValue = allowed.has(value) ? value : "texto";
+        if (this.quickCreateTypeInput) {
+            this.quickCreateTypeInput.value = safeValue;
+        }
+        if (this.quickCreateModal) {
+            this.quickCreateModal.querySelectorAll(".tesauro-quick-type-btn").forEach((btn) => {
+                const isActive = btn.dataset.value === safeValue;
+                btn.style.background = isActive ? "#eef2ff" : "white";
+                btn.style.color = isActive ? "#1e3a8a" : "#334155";
+                btn.style.fontWeight = isActive ? "700" : "500";
+                btn.style.borderColor = isActive ? "#6366f1" : "#cbd5e1";
+            });
+        }
+        this.toggleQuickSelectorOptions();
+    },
+
+    getQuickCreateType() {
+        return this.quickCreateTypeInput?.value || "texto";
+    },
+
+    resetQuickSelectorOptions() {
+        if (!this.quickCreateSelectorOptionsBody) return;
+        this.quickCreateSelectorOptionsBody.innerHTML = "";
+        this.addQuickSelectorOptionRow();
+    },
+
+    addQuickSelectorOptionRow(ref = "", valor = "") {
+        if (!this.quickCreateSelectorOptionsBody) return;
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.gap = "6px";
+        row.style.alignItems = "center";
+        row.className = "tesauro-quick-option-row";
+        row.innerHTML = `
+            <input class="tesauro-quick-opt-ref" type="text" placeholder="Referencia opción" value="${this.escapeAttr(this.limitReferenceLength(ref))}" maxlength="40" style="flex:0.8; padding:6px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+            <input class="tesauro-quick-opt-valor" type="text" placeholder="Valor opción" value="${this.escapeAttr(valor)}" style="flex:1; padding:6px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px;">
+            <button type="button" class="tesauro-quick-opt-del" style="padding:5px 8px; border-radius:6px; border:1px solid #fecaca; background:#fee2e2; color:#991b1b; cursor:pointer;">✖</button>
+        `;
+
+        const refInput = row.querySelector(".tesauro-quick-opt-ref");
+        if (refInput) {
+            refInput.addEventListener("input", () => {
+                const details = this.sanitizeReferenceWithDetails(refInput.value);
+                refInput.value = details.value;
+                this.notifyInvalidReferenceAttempt(details);
+            });
+        }
+
+        const delBtn = row.querySelector(".tesauro-quick-opt-del");
+        if (delBtn) {
+            delBtn.addEventListener("click", () => {
+                row.remove();
+                if (!this.quickCreateSelectorOptionsBody.children.length) {
+                    this.addQuickSelectorOptionRow();
+                }
+            });
+        }
+        this.quickCreateSelectorOptionsBody.appendChild(row);
     },
 
     closeQuickCreateModal() {
@@ -741,11 +867,11 @@ const DataTesauro = {
     },
 
     handleQuickCreate() {
-        if (!this.quickCreateNameInput || !this.quickCreateRefInput || !this.quickCreateTypeSelect) return;
+        if (!this.quickCreateNameInput || !this.quickCreateRefInput || !this.quickCreateTypeInput) return;
 
         const nombre = (this.quickCreateNameInput.value || "").trim();
         let ref = (this.quickCreateRefInput.value || "").trim();
-        const tipo = this.quickCreateTypeSelect.value || "texto";
+        const tipo = this.getQuickCreateType();
         const crearRef = (this.quickCreateRefSelect?.value || "no") === "si";
 
         if (!nombre) {
@@ -782,7 +908,28 @@ const DataTesauro = {
         };
 
         if (tipo === "selector") {
-            nuevo.opciones = [];
+            const opciones = Array.from(this.quickCreateSelectorOptionsBody?.querySelectorAll(".tesauro-quick-option-row") || [])
+                .map((row) => {
+                    const refEl = row.querySelector(".tesauro-quick-opt-ref");
+                    const valorEl = row.querySelector(".tesauro-quick-opt-valor");
+                    const refOpt = this.limitReferenceLength((refEl?.value || "").trim());
+                    const valorOpt = (valorEl?.value || "").trim();
+                    if (!refOpt && !valorOpt) return null;
+                    if (!refOpt || !valorOpt) return "__invalid__";
+                    return {
+                        id: this.generateId(),
+                        ref: refOpt,
+                        valor: valorOpt
+                    };
+                })
+                .filter(Boolean);
+
+            if (opciones.includes("__invalid__")) {
+                alert("Cada opción de selector debe incluir referencia y valor.");
+                return;
+            }
+
+            nuevo.opciones = opciones;
         }
 
         this.campos = this.campos || [];
@@ -877,10 +1024,47 @@ const DataTesauro = {
             .replace(/'/g, "&#39;");
     },
     limitReferenceLength(ref, max = 40) {
-        if (!ref) return "";
+        return this.sanitizeReferenceWithDetails(ref, max).value;
+    },
+
+    sanitizeReferenceWithDetails(ref, max = 40) {
+        if (!ref) {
+            return {
+                value: "",
+                trimmedByRule: false,
+                original: ""
+            };
+        }
         const normalized = String(ref).trim();
-        if (normalized.length <= max) return normalized;
-        return normalized.slice(0, max);
+        const withoutSpaces = normalized.replace(/\s+/g, "");
+        const safe = withoutSpaces.replace(/[^A-Za-z0-9_]/g, "");
+        const value = safe.length <= max ? safe : safe.slice(0, max);
+        const trimmedByRule = normalized !== value;
+        return {
+            value,
+            trimmedByRule,
+            original: normalized
+        };
+    },
+
+    updateReferenceFeedback(feedbackEl, details) {
+        if (!feedbackEl) return;
+        if (!details?.trimmedByRule) {
+            feedbackEl.style.display = "none";
+            feedbackEl.textContent = "";
+            return;
+        }
+        feedbackEl.style.display = "block";
+        feedbackEl.textContent = `Referencia corregida: "${details.original}" no cumple las reglas (solo A-Z, 0-9 y _; máx. 40).`;
+        this.notifyInvalidReferenceAttempt(details);
+    },
+
+    notifyInvalidReferenceAttempt(details) {
+        if (!details?.trimmedByRule) return;
+        const now = Date.now();
+        if (now - this.lastReferenceWarningAt < 1200) return;
+        this.lastReferenceWarningAt = now;
+        console.warn(`Referencia no permitida detectada: ${details.original}`);
     },
 // ⭐ NUEVO: generador de referencias con inversión + SiNo siempre al final
 generarReferenciaDesdeNombre(nombre) {
