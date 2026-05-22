@@ -1,13 +1,5 @@
 # Log de cambios
 
-## v1.3.86 - 2026-05-22
-- Se actualizó la importación de tesauros para trabajar con archivos Excel (`.xlsx/.xls`) además de CSV.
-- El flujo ahora es en dos pasos: primero se suben ambos archivos (tesauros y valores), y después se habilita un bloque de mapeo de columnas para cada Excel antes de importar.
-- Se añadieron selectores de mapeo para asociar columnas origen con campos destino (referencia, nombre, tipo, momento, agrupación y valores de selector).
-- Se incorporó la carga de hojas Excel usando la librería `XLSX` en cliente y se mantuvo compatibilidad con CSV en el mismo flujo.
-- Se documentó esta consolidación en el log de cambios.
-- Se actualizó la versión visible de la app a `v1.3.86` y la versión del proyecto en `package.json` a `1.3.86`.
-
 ## v1.3.85 - 2026-03-27
 - Se corrigió definitivamente el problema visual del selector de **Tipo** en el modal rápido de creación: se sustituyó el desplegable nativo por un selector de botones en línea para evitar el popup descolocado.
 - El nuevo selector de tipo mantiene los mismos valores funcionales (`texto`, `selector`, `si_no`, `numero`, `moneda`, `fecha`) y sigue activando el bloque de opciones cuando se elige `selector`.
