@@ -2411,21 +2411,19 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                 gap:10px;
                 max-height:80vh;
             ">
-                <h2 style="margin:0 0 4px 0; text-align:center;">📂 Importar tesauros desde CSV</h2>
+                <h2 style="margin:0 0 4px 0; text-align:center;">📂 Importar tesauros desde XLSX</h2>
                 <p style="margin:0; font-size:13px; color:#4b5563;">
-                    Sube los CSV generados por el exportador (Tesauro.csv obligatorio,
-                    Tesauro_Valores.csv y Vinculacion_Tesauros.csv opcionales). Se combinarán
-                    las referencias existentes con los datos importados.
+                    Sube ambos Excel y luego mapea las columnas con los campos esperados.
+                    Primero se cargan los archivos, después podrás confirmar el mapeo.
                 </p>
 
-                <label style="font-size:13px; color:#0f172a; font-weight:bold;">Tesauro.csv *</label>
-                <input id="tmCsvFileMain" type="file" accept=".csv" style="padding:6px; border:1px solid #cbd5e1; border-radius:6px;">
+                <label style="font-size:13px; color:#0f172a; font-weight:bold;">Excel Tesauros (principal) *</label>
+                <input id="tmCsvFileMain" type="file" accept=".xlsx,.xls,.csv" style="padding:6px; border:1px solid #cbd5e1; border-radius:6px;">
 
-                <label style="font-size:13px; color:#0f172a; font-weight:bold;">Tesauro_Valores.csv (opcional)</label>
-                <input id="tmCsvFileValores" type="file" accept=".csv" style="padding:6px; border:1px solid #cbd5e1; border-radius:6px;">
+                <label style="font-size:13px; color:#0f172a; font-weight:bold;">Excel Valores de tesauros *</label>
+                <input id="tmCsvFileValores" type="file" accept=".xlsx,.xls,.csv" style="padding:6px; border:1px solid #cbd5e1; border-radius:6px;">
 
-                <label style="font-size:13px; color:#0f172a; font-weight:bold;">Vinculacion_Tesauros.csv (opcional)</label>
-                <input id="tmCsvFileVinc" type="file" accept=".csv" style="padding:6px; border:1px solid #cbd5e1; border-radius:6px;">
+                <div id="tmCsvMappingArea" style="display:none; border:1px solid #cbd5e1; border-radius:8px; padding:10px; gap:8px; flex-direction:column;"></div>
 
                 <div style="display:flex; gap:10px; margin-top:8px;">
                     <button id="tmCsvCancel" style="
@@ -2433,11 +2431,17 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
                         padding:8px; border-radius:6px; cursor:pointer;
                     ">Cancelar</button>
 
+                    <button id="tmCsvPrepare" style="
+                        flex:1; background:#1d4ed8; color:white;
+                        border:none; padding:8px; border-radius:6px;
+                        cursor:pointer; font-weight:bold;
+                    ">Cargar y mapear</button>
+
                     <button id="tmCsvImport" style="
                         flex:1; background:#0f766e; color:white;
                         border:none; padding:8px; border-radius:6px;
                         cursor:pointer; font-weight:bold;
-                    ">Importar CSV</button>
+                    ">Importar XLSX</button>
                 </div>
             </div>
         `;
@@ -2446,6 +2450,7 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
         this.csvImportModal = div;
 
         const btnCancel = div.querySelector("#tmCsvCancel");
+        const btnPrepare = div.querySelector("#tmCsvPrepare");
         const btnImport = div.querySelector("#tmCsvImport");
 
         if (btnCancel) {
@@ -2454,49 +2459,102 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
             });
         }
 
+        if (btnPrepare) {
+            btnPrepare.addEventListener("click", () => this.prepareCsvMapping());
+        }
+
         if (btnImport) {
             btnImport.addEventListener("click", () => this.handleCsvImport());
         }
     },
 
-    async handleCsvImport() {
+    async prepareCsvMapping() {
         if (!this.csvImportModal) return;
-
         const mainInput = this.csvImportModal.querySelector("#tmCsvFileMain");
         if (!mainInput || !mainInput.files?.length) {
-            alert("Selecciona el archivo Tesauro.csv exportado.");
+            alert("Selecciona el Excel principal de tesauros.");
             return;
         }
 
         const valoresInput = this.csvImportModal.querySelector("#tmCsvFileValores");
-        const vincInput = this.csvImportModal.querySelector("#tmCsvFileVinc");
+        if (!valoresInput || !valoresInput.files?.length) {
+            alert("Selecciona el Excel de valores de tesauros.");
+            return;
+        }
+
+        const mainRows = await this.readSpreadsheetRows(mainInput.files[0]);
+        const valoresRows = await this.readSpreadsheetRows(valoresInput.files[0]);
+        if (!mainRows.length || !valoresRows.length) {
+            alert("No se pudieron leer filas en alguno de los Excel.");
+            return;
+        }
+
+        const state = {
+            mainRows,
+            valoresRows,
+            mainHeader: Object.keys(mainRows[0] || {}),
+            valoresHeader: Object.keys(valoresRows[0] || {}),
+            mainMap: {},
+            valoresMap: {}
+        };
+
+        this.csvImportState = state;
+        this.renderCsvMappingSelectors();
+    },
+
+    renderCsvMappingSelectors() {
+        const area = this.csvImportModal?.querySelector("#tmCsvMappingArea");
+        if (!area || !this.csvImportState) return;
+        const mainFields = [
+            { key: "ref", label: "Referencia *" },
+            { key: "nombre", label: "Nombre *" },
+            { key: "tipo", label: "Tipo *" },
+            { key: "momento", label: "Momento captura" },
+            { key: "agrupacion", label: "Agrupación" }
+        ];
+        const valoresFields = [
+            { key: "refTesauro", label: "Referencia tesauro *" },
+            { key: "valor", label: "Valor *" },
+            { key: "refValor", label: "Referencia valor" }
+        ];
+        const buildOptions = (headers) => [`<option value="">-- Sin mapear --</option>`, ...headers.map(h => `<option value="${h}">${h}</option>`)].join("");
+        area.style.display = "flex";
+        area.innerHTML = `
+            <h4 style="margin:0;">Mapeo de columnas</h4>
+            <div style="font-size:12px;color:#374151;">Tesauros</div>
+            ${mainFields.map(f => `<label style="font-size:12px;">${f.label}<select data-map-group="main" data-map-key="${f.key}" style="width:100%;padding:4px;">${buildOptions(this.csvImportState.mainHeader)}</select></label>`).join("")}
+            <div style="font-size:12px;color:#374151;">Valores</div>
+            ${valoresFields.map(f => `<label style="font-size:12px;">${f.label}<select data-map-group="valores" data-map-key="${f.key}" style="width:100%;padding:4px;">${buildOptions(this.csvImportState.valoresHeader)}</select></label>`).join("")}
+        `;
+    },
+
+    async handleCsvImport() {
+        if (!this.csvImportState) {
+            alert("Primero pulsa “Cargar y mapear”.");
+            return;
+        }
 
         try {
-            const mainText = await this.readFileAsText(mainInput.files[0]);
-            const valoresText = valoresInput?.files?.length ? await this.readFileAsText(valoresInput.files[0]) : "";
-            const vincText = vincInput?.files?.length ? await this.readFileAsText(vincInput.files[0]) : "";
+            const selects = Array.from(this.csvImportModal.querySelectorAll("select[data-map-group]"));
+            selects.forEach(sel => {
+                const group = sel.dataset.mapGroup;
+                const key = sel.dataset.mapKey;
+                this.csvImportState[`${group}Map`][key] = sel.value || "";
+            });
 
-            const campos = this.parseTesauroCsv(mainText);
+            const campos = this.parseTesauroRowsMapped(this.csvImportState.mainRows, this.csvImportState.mainMap);
             if (!campos.length) {
-                alert("No se ha podido leer ningún tesauro desde Tesauro.csv.");
+                alert("No se pudo construir ningún tesauro con el mapeo seleccionado.");
                 return;
             }
 
-            const valoresMap = valoresText ? this.parseTesauroValoresCsv(valoresText) : new Map();
-            const vincMap = vincText ? this.parseVinculacionCsv(vincText) : new Map();
+            const valoresMap = this.parseValoresRowsMapped(this.csvImportState.valoresRows, this.csvImportState.valoresMap);
 
             campos.forEach(c => {
                 const key = (c.ref || "").toLowerCase();
                 if (c.tipo === "selector" && valoresMap.has(key)) {
                     c.opciones = valoresMap.get(key);
                 }
-
-                if (vincMap.has(key)) {
-                    const vinc = vincMap.get(key);
-                    c.momento = vinc.momento || c.momento;
-                    c.agrupacion = vinc.agrupacion || c.agrupacion;
-                }
-
                 if (!c.momento) c.momento = "Solicitud";
                 if (!c.agrupacion) c.agrupacion = "Agrupación";
                 if (c.tipo === "selector" && !Array.isArray(c.opciones)) {
@@ -2508,12 +2566,66 @@ Solicitud\tGeneral\tRefCampo\tCampo visible\tSelector I18N"></textarea>
             this.render();
             this.recordHistory();
 
-            alert(`✔ Importados/actualizados ${campos.length} tesauros desde CSV.`);
+            alert(`✔ Importados/actualizados ${campos.length} tesauros desde XLSX.`);
             this.csvImportModal.style.display = "none";
+            this.csvImportState = null;
         } catch (err) {
             console.error(err);
-            alert("No se pudieron leer los CSV importados. Comprueba el formato.");
+            alert("No se pudieron importar los Excel. Revisa archivos y mapeo.");
         }
+    },
+
+    async readSpreadsheetRows(file) {
+        const name = (file?.name || "").toLowerCase();
+        if (name.endsWith(".csv")) {
+            const txt = await this.readFileAsText(file);
+            const rows = this.parseCsvRows(txt);
+            if (!rows.length) return [];
+            const headers = rows.shift();
+            return rows.map(parts => Object.fromEntries(headers.map((h, i) => [h, parts[i] || ""])));
+        }
+        if (typeof XLSX === "undefined") {
+            throw new Error("No está disponible la librería XLSX.");
+        }
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const first = workbook.SheetNames[0];
+        return XLSX.utils.sheet_to_json(workbook.Sheets[first], { defval: "" });
+    },
+
+    parseTesauroRowsMapped(rows, map) {
+        return rows.map(row => {
+            const ref = this.limitReferenceLength(((row[map.ref] || "") + "").trim());
+            if (!ref) return null;
+            return {
+                id: (typeof DataTesauro.generateId === "function") ? DataTesauro.generateId() : TesauroManager.generateId(),
+                ref,
+                nombre: ((row[map.nombre] || ref) + "").trim(),
+                tipo: this.mapTipoFromExportTipo((row[map.tipo] || "") + ""),
+                opciones: [],
+                momento: ((row[map.momento] || "") + "").trim(),
+                agrupacion: ((row[map.agrupacion] || "") + "").trim()
+            };
+        }).filter(Boolean);
+    },
+
+    parseValoresRowsMapped(rows, map) {
+        const out = new Map();
+        rows.forEach(row => {
+            const refTesauro = ((row[map.refTesauro] || "") + "").trim();
+            const valor = ((row[map.valor] || "") + "").trim();
+            if (!refTesauro || !valor) return;
+            const refValor = ((row[map.refValor] || "") + "").trim();
+            const key = refTesauro.toLowerCase();
+            const arr = out.get(key) || [];
+            arr.push({
+                id: (typeof DataTesauro.generateId === "function") ? DataTesauro.generateId() : TesauroManager.generateId(),
+                ref: refValor || valor,
+                valor
+            });
+            out.set(key, arr);
+        });
+        return out;
     },
 
     readFileAsText(file) {
